@@ -14,7 +14,7 @@ Built with **Spring Boot**, **Spring AI**, **DeepSeek LLM**, and **ChromaDB**, t
 
 ## 🛠️ Tech Stack
 
-- **Backend:** Java 17+, Spring Boot 3.x
+- **Backend:** Java 25, Spring Boot 4
 - **AI Integration:** Spring AI
 - **LLM:** DeepSeek API (`deepseek-chat`)
 - **Vector Database:** ChromaDB (via Docker)
@@ -24,7 +24,7 @@ Built with **Spring Boot**, **Spring AI**, **DeepSeek LLM**, and **ChromaDB**, t
 
 ### 1. Prerequisites
 - Docker & Docker Compose
-- Java 17 or higher
+- Java 25 or higher
 - Maven
 - A DeepSeek API Key
 
