@@ -81,7 +81,7 @@ The application will read the files, chunk them into paragraphs, create vector e
 
 ### Chat Endpoint
 
-- ### URL ### ```POST /api/chat```
+- ### URL  ```POST /api/chat```
 - ### Body: ###
 ```json
 {
