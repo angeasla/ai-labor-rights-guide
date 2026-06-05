@@ -1,5 +1,3 @@
-version: '3.9'
-
 services:
   chromadb:
     image: chromadb/chroma:latest
@@ -11,6 +9,30 @@ services:
     environment:
       - IS_PERSISTENT=TRUE
       - ALLOW_RESET=TRUE
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: backend
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_PROFILES_ACTIVE=dev
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+      - ADMIN_SECRET=${ADMIN_SECRET}
+    depends_on:
+      - chromadb
+
+  frontend:
+    build:
+      context: ../Angular-frontend
+      dockerfile: Dockerfile
+    container_name: frontend
+    ports:
+      - "4200:80"
+    depends_on:
+      - backend
 
 volumes:
   chroma-data:
