@@ -47,8 +47,12 @@ public class MeilisearchService {
         this.client = b.build();
     }
 
-    /** Local embedding for a piece of text (length = the model's dimension, e.g. 384). */
-    public float[] embed(String text) {
+    /**
+     * Local embedding for a piece of text (length = the model's dimension, e.g. 384). Synchronized: the
+     * transformers ONNX model is a shared singleton and concurrent {@code embed()} calls (parallel
+     * searches under virtual threads, or ingestion) are serialized to avoid tokenizer/session races.
+     */
+    public synchronized float[] embed(String text) {
         return embeddingModel.embed(text);
     }
 
@@ -122,7 +126,8 @@ public class MeilisearchService {
     public Map<String, Object> getBySlug(String slug) {
         String id = slug.replace("/", "-");
         try {
-            return client.get().uri("/indexes/" + index + "/documents/" + id)
+            return client.get()
+                    .uri(b -> b.path("/indexes/{index}/documents/{id}").build(index, id))
                     .retrieve().body(Map.class);
         } catch (Exception e) {
             log.debug("Article '{}' not found: {}", slug, e.getMessage());
