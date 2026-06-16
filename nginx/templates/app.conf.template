@@ -1,0 +1,105 @@
+# nginx config — processed by envsubst on container start.
+# Only ${DOMAIN} is substituted; nginx variables ($host, $uri, etc.) are left as-is.
+
+# ── HTTP: ACME challenge + redirect to HTTPS ────────────────────────────
+server {
+    listen 80;
+    listen [::]:80;
+    server_name ${DOMAIN};
+
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+# ── Proxy cache for wiki content (articles + index — served with 24h Cache-Control) ──────────
+proxy_cache_path /var/cache/nginx/wiki
+                 levels=1:2
+                 keys_zone=wiki_cache:2m
+                 max_size=32m
+                 inactive=48h
+                 use_temp_path=off;
+
+# ── HTTPS: SSL termination + reverse proxy ──────────────────────────────
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name ${DOMAIN};
+
+    ssl_certificate     /etc/letsencrypt/live/${DOMAIN}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/${DOMAIN}/privkey.pem;
+    include             /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam         /etc/letsencrypt/ssl-dhparams.pem;
+
+    # Security headers
+    add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload" always;
+    add_header X-Frame-Options DENY always;
+    add_header X-Content-Type-Options nosniff always;
+    add_header X-XSS-Protection "1; mode=block" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+    # Compress text responses at the edge (markdown articles, JSON, JS/CSS proxied from the frontend).
+    # Already-compressed types (images, woff2) are skipped. Covers every upstream in one place.
+    gzip              on;
+    gzip_vary         on;
+    gzip_proxied      any;
+    gzip_comp_level   5;
+    gzip_min_length   256;
+    gzip_types        text/plain text/css application/json application/javascript
+                      application/xml text/markdown image/svg+xml;
+
+    # ── Wiki content (index + articles) — cached at nginx for 24 h ────────
+    # The backend sets Cache-Control: public, max-age=86400, must-revalidate.
+    # nginx stores the response on disk and serves subsequent requests without hitting the JVM.
+    # NOTE: the disk cache SURVIVES a backend restart — a content redeploy is NOT auto-busted and
+    # stale markdown may be served for up to 24 h. To force-refresh on deploy either purge the cache
+    # dir (`rm -rf /var/cache/nginx/wiki/*` then `nginx -s reload`) or lower proxy_cache_valid.
+    location /api/wiki/ {
+        proxy_pass          http://backend:8080;
+        proxy_http_version  1.1;
+        proxy_set_header    Host              $host;
+        proxy_set_header    X-Real-IP         $remote_addr;
+        proxy_set_header    X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header    X-Forwarded-Proto $scheme;
+
+        proxy_cache             wiki_cache;
+        proxy_cache_valid       200 24h;
+        proxy_cache_use_stale   error timeout updating http_500 http_502 http_503 http_504;
+        proxy_cache_background_update on;
+        proxy_cache_lock        on;
+
+        # A location-level add_header REPLACES all inherited add_headers, so the server-level
+        # security headers must be restated here or wiki responses would ship without them.
+        add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload" always;
+        add_header X-Frame-Options DENY always;
+        add_header X-Content-Type-Options nosniff always;
+        add_header X-XSS-Protection "1; mode=block" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        add_header X-Cache-Status $upstream_cache_status always;
+    }
+
+    # ── Spring backend API (chat, search, calculators) ──────────────────
+    location /api/ {
+        proxy_pass          http://backend:8080;
+        proxy_http_version  1.1;
+        proxy_set_header    Host              $host;
+        proxy_set_header    X-Real-IP         $remote_addr;
+        proxy_set_header    X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header    X-Forwarded-Proto $scheme;
+        proxy_read_timeout  120s;   # LLM responses can take a while
+    }
+
+    # ── Angular SPA ─────────────────────────────────────────────────────
+    location / {
+        proxy_pass       http://frontend:80;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # Meilisearch (7700) is intentionally NOT proxied — internal network only.
+}

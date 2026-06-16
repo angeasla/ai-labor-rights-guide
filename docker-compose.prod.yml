@@ -1,0 +1,126 @@
+name: ai-labor-rights-prod
+
+# Production stack: Meilisearch + Spring backend + Angular frontend + nginx + Let's Encrypt.
+# All services on an internal network; only nginx (80/443) is reachable externally.
+#
+# Prerequisites:
+#   1. cp .env.example .env   # fill DEEPSEEK_API_KEY, MEILI_MASTER_KEY, DOMAIN, EMAIL
+#   2. bash scripts/init-ssl.sh    # one-time Let's Encrypt bootstrap
+#   3. docker compose -f docker-compose.prod.yml up -d
+#   4. docker compose -f docker-compose.prod.yml exec backend \
+#        sh -c 'wget -qO- --post-data= http://localhost:8080/api/admin/ingest'   # index content
+
+services:
+  meilisearch:
+    image: getmeili/meilisearch:v1.12
+    environment:
+      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY}
+      MEILI_NO_ANALYTICS: "true"
+    volumes:
+      - meili_data:/meili_data
+    networks: [internal]
+    restart: unless-stopped
+    # Memory budget for the 8 GB box (see backend note). Meili memory-maps its index; the cap is a
+    # safety ceiling, not a target — the OS page cache (reclaimable) handles the hot index pages.
+    mem_limit: 2g
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7700/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ChromaDB — alternative chat-RAG backend (APP_RAG_PROVIDER=chroma). Run alongside Meili for the
+  # trial so ingestion populates both and the env var can flip live; post-trial drop the loser and
+  # reclaim ~1 GB. Internal network only — never exposed.
+  chromadb:
+    image: chromadb/chroma:0.6.3
+    environment:
+      IS_PERSISTENT: "TRUE"
+      ALLOW_RESET: "TRUE"
+    volumes:
+      - chroma_data:/chroma/chroma
+    networks: [internal]
+    restart: unless-stopped
+    mem_limit: 1g
+    # Informational (backend waits for start, not health). v2 heartbeat path is for Chroma 0.5+/0.6.
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v2/heartbeat')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build: .
+    environment:
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY}
+      MEILISEARCH_URL: http://meilisearch:7700
+      MEILISEARCH_KEY: ${MEILI_MASTER_KEY}
+      # Same-origin in prod (nginx serves both), so no CORS origins needed.
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
+      # Chat RAG backend: meili (default) | chroma. The /api/search box stays on Meili regardless.
+      APP_RAG_PROVIDER: ${APP_RAG_PROVIDER:-meili}
+      CHROMA_HOST: http://chromadb
+      CHROMA_PORT: "8000"
+    volumes:
+      # Local ONNX embedding model (read-only). If ./models is empty the app downloads it at startup
+      # (the VPS has internet); behind a proxy, fetch it first with scripts/fetch-embedding-model.*.
+      - ./models:/app/models:ro
+    depends_on:
+      meilisearch:
+        condition: service_healthy
+      chromadb:
+        condition: service_started
+    networks: [internal]
+    restart: unless-stopped
+    # 8 GB box budget (trial runs BOTH vector engines): ~1 GB OS/page-cache, 2 GB Meili, 1 GB Chroma,
+    # 2.5 GB backend, ~0.25 GB the two nginx + certbot — ~1.25 GB headroom. With mem_limit set, the
+    # JVM's MaxRAMPercentage=60 (Dockerfile) resolves heap against THIS limit (~1.5 GB heap), not the
+    # host's 8 GB; the remaining ~1 GB covers the ONNX embedder's off-heap native memory + metaspace.
+    mem_limit: 2560m
+
+  frontend:
+    build:
+      context: ../Angular-frontend
+    networks: [internal]
+    depends_on: [backend]
+    restart: unless-stopped
+    mem_limit: 128m  # static nginx — tiny resident set
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN}
+      NGINX_ENVSUBST_TEMPLATE_VARS: DOMAIN   # only substitute $DOMAIN, leave $host etc. alone
+    volumes:
+      - ./nginx/templates:/etc/nginx/templates:ro
+      - ./certbot/conf:/etc/letsencrypt:ro
+      - ./certbot/www:/var/www/certbot:ro
+    networks: [internal]
+    depends_on: [backend, frontend]
+    restart: unless-stopped
+    mem_limit: 192m  # proxy + small disk cache (cache lives on disk, not RAM)
+    # Reload nginx every 6 h to pick up renewed certs (certbot renews every 12 h)
+    command: >
+      /bin/sh -c "while :; do sleep 6h & wait $${!}; nginx -s reload; done & nginx -g 'daemon off;'"
+
+  certbot:
+    image: certbot/certbot
+    volumes:
+      - ./certbot/conf:/etc/letsencrypt
+      - ./certbot/www:/var/www/certbot
+    networks: [internal]
+    restart: unless-stopped
+    mem_limit: 128m
+    entrypoint: >
+      /bin/sh -c "trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;"
+
+networks:
+  internal:
+    driver: bridge
+
+volumes:
+  meili_data:
+  chroma_data:
