@@ -29,8 +29,8 @@ class CalculatorTest {
         assertEquals(134.66, v2.incomeTaxMonthly(), EPS);
 
         var v3 = WageCalculators.grossToNet(2500, 2, 14, false);
-        assertEquals(1818.94, v3.netMonthly(), EPS);
-        assertEquals(346.81, v3.incomeTaxMonthly(), EPS);
+        assertEquals(1876.08, v3.netMonthly(), EPS);   // 2026: 2 children cut the 10-20k (16%) + 20-30k (22%) bands
+        assertEquals(289.67, v3.incomeTaxMonthly(), EPS);
 
         var v4 = WageCalculators.grossToNet(5000, 0, 12, false);
         assertEquals(3200.55, v4.netMonthly(), EPS);
@@ -46,6 +46,24 @@ class CalculatorTest {
     @Test
     void grossToNet_rejectsNonPositive() {
         assertThrows(IllegalArgumentException.class, () -> WageCalculators.grossToNet(0, 0, 14, false));
+    }
+
+    @Test
+    void grossToNet_childAndAgeDependent_2026() {
+        // 3 children (age ≥31): 10-20k drops to 9%, 20-30k to 20%.
+        var fam = WageCalculators.grossToNet(2000, 3, 14, false, 35);
+        assertEquals(1621.43, fam.netMonthly(), EPS);
+        assertEquals(111.17, fam.incomeTaxMonthly(), EPS);
+
+        // Age ≤25: first two bands 0% → no income tax at €1500.
+        var youth = WageCalculators.grossToNet(1500, 0, 14, false, 24);
+        assertEquals(0.00, youth.incomeTaxMonthly(), EPS);
+        assertEquals(1299.45, youth.netMonthly(), EPS);
+
+        // Age 26-30: first two bands 9%.
+        var youngAdult = WageCalculators.grossToNet(2000, 0, 14, false, 28);
+        assertEquals(169.63, youngAdult.incomeTaxMonthly(), EPS);
+        assertEquals(1562.97, youngAdult.netMonthly(), EPS);
     }
 
     // ---- Overtime ----

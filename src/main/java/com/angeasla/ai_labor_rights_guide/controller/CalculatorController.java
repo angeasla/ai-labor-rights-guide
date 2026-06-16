@@ -16,12 +16,12 @@ public class CalculatorController {
 
     @PostMapping("/gross-to-net")
     public WageCalculators.GrossToNetResult grossToNet(@RequestBody GrossToNetRequest r) {
-        return WageCalculators.grossToNet(r.gross(), r.children(), r.months(), r.disability());
+        return WageCalculators.grossToNet(r.gross(), r.children(), r.months(), r.disability(), r.age());
     }
 
     @PostMapping("/net-to-gross")
     public GrossResult netToGross(@RequestBody NetToGrossRequest r) {
-        return new GrossResult(WageCalculators.netToGross(r.net(), r.children(), r.months(), r.disability()));
+        return new GrossResult(WageCalculators.netToGross(r.net(), r.children(), r.months(), r.disability(), r.age()));
     }
 
     @PostMapping("/leave-days")
@@ -109,10 +109,10 @@ public class CalculatorController {
     public record GrossResult(double gross) {
     }
 
-    public record GrossToNetRequest(double gross, int children, int months, boolean disability) {
+    public record GrossToNetRequest(double gross, int children, int months, boolean disability, int age) {
     }
 
-    public record NetToGrossRequest(double net, int children, int months, boolean disability) {
+    public record NetToGrossRequest(double net, int children, int months, boolean disability, int age) {
     }
 
     public record LeaveDaysRequest(int workWeek, int tenureMonths, int totalCareerYears) {

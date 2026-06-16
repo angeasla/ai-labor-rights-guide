@@ -46,7 +46,12 @@ public final class WageCalculators {
 
     // ---- Gross → Net ----
 
+    /** Convenience overload — adult (age ≥31) scale. */
     public static GrossToNetResult grossToNet(double monthlyGross, int children, int months, boolean disability) {
+        return grossToNet(monthlyGross, children, months, disability, 0);
+    }
+
+    public static GrossToNetResult grossToNet(double monthlyGross, int children, int months, boolean disability, int age) {
         if (monthlyGross <= 0) {
             throw new IllegalArgumentException("monthlyGross must be > 0");
         }
@@ -56,7 +61,7 @@ public final class WageCalculators {
         double annualEfka = monthlyEfka * mult;
         double taxable = Math.max(0, annualGross - annualEfka);
 
-        double bracketTax = progressiveTax(taxable);
+        double bracketTax = progressiveTax(taxable, children, age);
         double reduction = (children >= 5)
                 ? 0
                 : Math.max(0, (taxable - TAX_CREDIT_REDUCTION_THRESHOLD) / 1000.0 * TAX_CREDIT_REDUCTION_PER_1000);
@@ -72,8 +77,13 @@ public final class WageCalculators {
                 round2(effRate), round2(monthlyGross + efkaEmployer), round2(efkaEmployer));
     }
 
-    /** Inverse of {@link #grossToNet} via bisection (the net→gross function is monotonic). */
+    /** Convenience overload — adult (age ≥31) scale. */
     public static double netToGross(double targetNet, int children, int months, boolean disability) {
+        return netToGross(targetNet, children, months, disability, 0);
+    }
+
+    /** Inverse of {@link #grossToNet} via bisection (the net→gross function is monotonic). */
+    public static double netToGross(double targetNet, int children, int months, boolean disability, int age) {
         if (targetNet <= 0) {
             throw new IllegalArgumentException("targetNet must be > 0");
         }
@@ -81,7 +91,7 @@ public final class WageCalculators {
         double hi = targetNet / (1 - EFKA_EMPLOYEE_RATE - 0.44); // safe upper bound (max marginal load)
         for (int i = 0; i < 100; i++) {
             double mid = (lo + hi) / 2;
-            double net = grossToNet(mid, children, months, disability).netMonthly();
+            double net = grossToNet(mid, children, months, disability, age).netMonthly();
             if (Math.abs(net - targetNet) < 0.005) {
                 return round2(mid);
             }

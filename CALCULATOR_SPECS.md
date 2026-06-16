@@ -27,19 +27,22 @@ Constants (2026):
 - Credit reduction: **€20 per €1000 of taxable income above €12,000** (i.e. `(taxable−12000)/1000×20`); **0 if children ≥ 5**. *(Both candidates used 0.005 on gross — corrected to 0.02 on taxable.)*
 - Disability +€200: **uncertain for 2026** — optional, default OFF.
 
-Formula (gross→net): `mult = months(12|14)`; `monthlyEfka = min(gross,7761.94)*0.1337`; `annualGross = gross*mult`; `annualEfka = monthlyEfka*mult`; `taxable = max(0, annualGross-annualEfka)`; `bracketTax = progressive(taxable)`; `reduction = children>=5?0:max(0,(taxable-12000)/1000*20)`; `credit = max(0, base(children)-reduction) + (disability?200:0)`; `annualTax = max(0, bracketTax-credit)`; `net = gross - monthlyEfka - annualTax/mult`.
+Formula (gross→net): `mult = months(12|14)`; `monthlyEfka = min(gross,7761.94)*0.1337`; `annualGross = gross*mult`; `annualEfka = monthlyEfka*mult`; `taxable = max(0, annualGross-annualEfka)`; `bracketTax = progressive(taxable, children, age)`; `reduction = children>=5?0:max(0,(taxable-12000)/1000*20)`; `credit = max(0, base(children)-reduction) + (disability?200:0)`; `annualTax = max(0, bracketTax-credit)`; `net = gross - monthlyEfka - annualTax/mult`.
 net→gross: bisection on `[target, target/(1-0.1337-0.44)]` until `|net-target|<0.005`.
 
-**Flag — youth brackets not modeled:** 2026 law gives age<26 a 0% band to €20k and 26–30 a reduced rate. We assume **age ≥ 30**. Add an optional `age` later if needed.
+**Child- & age-dependent rates (2026, Ν.5246/2025)** via `taxBracketRates(children, age)`: age ≤25 → first two bands **0%**; 26–30 → **9%**; ≥31 (or `age=0`/unspecified) → 10–20k = **20/18/16/9/0** for 0/1/2/3/4+ children; 20–30k = **26 − 2pp/child** (floor 14%) for all ages; **4+ children** also zero the first two bands; 30–40k/40–60k/60k+ = 34/39/44 fixed. (gross2net.gr is a *freelancer* calculator — not a reference for this employee scale; verified vs taxheaven + Ν.5246/2025. Open: the 5th/6th-child step in the 20–30k band — confirm vs the AADE FEK.)
 
-Test vectors (age≥30, disability off, 2026 law):
-| gross | children | months | → net / efka / tax |
-|---|---|---|---|
-| 920 | 0 | 14 | 771.67 / 123.00 / 25.33 |
-| 1500 | 0 | 14 | 1164.79 / 200.55 / 134.66 |
-| 2500 | 2 | 14 | 1818.94 / 334.25 / 346.81 |
-| 5000 | 0 | 12 | 3200.55 / 668.50 / 1130.95 |
-| net→gross target=1000, 0, 14 | assert net(gross)=1000 ±0.01 |
+Test vectors (disability off, 2026 law; `age` col, blank = adult ≥31):
+| gross | children | age | months | → net / efka / tax |
+|---|---|---|---|---|
+| 920 | 0 | — | 14 | 771.67 / 123.00 / 25.33 |
+| 1500 | 0 | — | 14 | 1164.79 / 200.55 / 134.66 |
+| 2500 | 2 | — | 14 | 1876.08 / 334.25 / 289.67 |
+| 2000 | 3 | 35 | 14 | 1621.43 / 267.40 / 111.17 |
+| 1500 | 0 | 24 | 14 | 1299.45 / 200.55 / 0.00 |
+| 2000 | 0 | 28 | 14 | 1562.97 / 267.40 / 169.63 |
+| 5000 | 0 | — | 12 | 3200.55 / 668.50 / 1130.95 |
+| net→gross target=1000, 0, —, 14 | assert net(gross)=1000 ±0.01 |
 
 ---
 

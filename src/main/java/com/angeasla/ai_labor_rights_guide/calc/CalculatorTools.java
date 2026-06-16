@@ -19,8 +19,9 @@ public class CalculatorTools {
             @ToolParam(description = "Μεικτός μηνιαίος μισθός σε ευρώ") double gross,
             @ToolParam(description = "Αριθμός εξαρτώμενων τέκνων (0 αν δεν υπάρχουν)") int children,
             @ToolParam(description = "Μήνες αποδοχών: 14 (με δώρα) ή 12") int months,
-            @ToolParam(description = "Αναπηρία ≥67% (προσθέτει έκπτωση φόρου €200)") boolean disability) {
-        return WageCalculators.grossToNet(gross, children, months, disability);
+            @ToolParam(description = "Αναπηρία ≥67% (προσθέτει έκπτωση φόρου €200)") boolean disability,
+            @ToolParam(description = "Ηλικία εργαζομένου — φοροαπαλλαγή νέων 2026: ≤25 αφορολόγητο έως 20.000€, 26–30 με 9% στα πρώτα 20.000€. Για >30 ετών ή άγνωστη ηλικία βάλε 35.") int age) {
+        return WageCalculators.grossToNet(gross, children, months, disability, age);
     }
 
     @Tool(description = "Υπολογίζει τον μεικτό μισθό που αντιστοιχεί σε έναν επιθυμητό καθαρό μισθό. Χρησιμοποίησε ΠΑΝΤΑ αυτό το εργαλείο — μην υπολογίζεις εσύ.")
@@ -28,8 +29,9 @@ public class CalculatorTools {
             @ToolParam(description = "Επιθυμητός καθαρός μηνιαίος μισθός σε ευρώ") double net,
             @ToolParam(description = "Αριθμός εξαρτώμενων τέκνων") int children,
             @ToolParam(description = "Μήνες αποδοχών: 14 ή 12") int months,
-            @ToolParam(description = "Αναπηρία ≥67%") boolean disability) {
-        return WageCalculators.netToGross(net, children, months, disability);
+            @ToolParam(description = "Αναπηρία ≥67%") boolean disability,
+            @ToolParam(description = "Ηλικία εργαζομένου (φοροαπαλλαγή νέων 2026). Για >30 ετών ή άγνωστη βάλε 35.") int age) {
+        return WageCalculators.netToGross(net, children, months, disability, age);
     }
 
     @Tool(description = "Υπολογίζει τις ημέρες ετήσιας άδειας (ΑΝ 539/1945 + ΕΓΣΣΕ). Χρησιμοποίησε ΠΑΝΤΑ αυτό το εργαλείο για ερωτήσεις περί ημερών άδειας — μην υπολογίζεις εσύ.")
