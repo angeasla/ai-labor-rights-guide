@@ -47,9 +47,4 @@ class ChatExceptionHandlerTest {
     void restClientExceptionReturnsFallback() {
         assertFallback(handler.handleRestClientException(new RestClientException("connection reset")));
     }
-
-    @Test
-    void catchAllReturnsFallback() {
-        assertFallback(handler.handleAny(new RuntimeException("unexpected")));
-    }
 }

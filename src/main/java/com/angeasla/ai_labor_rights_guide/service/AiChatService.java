@@ -80,6 +80,10 @@ public class AiChatService {
 
         recordUsage(response);
 
+        if (response == null || response.getResult() == null || response.getResult().getOutput() == null) {
+            log.warn("Chat response had no result/output (e.g. token budget exhausted mid-tool-chain)");
+            return "Συγγνώμη, δεν μπόρεσα να ολοκληρώσω την απάντηση. Δοκίμασε ξανά.";
+        }
         return response.getResult().getOutput().getText();
     }
 

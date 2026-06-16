@@ -48,15 +48,6 @@ public class ChatExceptionHandler {
     }
 
     /**
-     * Backstop for anything not matched above so {@code /api/chat} never returns a raw 500. Safe because this
-     * advice is scoped to {@link ChatController} only — it cannot mask failures from other controllers.
-     */
-    @ExceptionHandler(Exception.class)
-    public ChatMessageDto handleAny(Exception ex) {
-        return fallback(ex);
-    }
-
-    /**
      * Logs the underlying outage at WARN (with the exception, so ops sees the stack trace) and returns the
      * static Greek fallback as a role="ai" bubble. Returns HTTP 200 by design: this is graceful degradation,
      * not an error — the Angular frontend renders {@code content} as ordinary chat markdown.
