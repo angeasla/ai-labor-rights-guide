@@ -69,6 +69,7 @@ services:
       chromadb:
         condition: service_started
     restart: unless-stopped
+    mem_limit: 2560m   # cap heap+native (JVM MaxRAMPercentage resolves against this); matches prod
 
   frontend:
     build:

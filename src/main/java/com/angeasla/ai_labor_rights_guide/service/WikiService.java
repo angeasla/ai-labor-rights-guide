@@ -69,6 +69,8 @@ public class WikiService {
 
     private static final Pattern FM_LINE = Pattern.compile("^([\\w-]+)\\s*:\\s*(.+)$");
     private static final Pattern DIACRITICS = Pattern.compile("\\p{M}+");
+    /** Allowed article paths: nested ascii slug segments ending in .md — blocks traversal/encoded paths. */
+    private static final Pattern SAFE_REL_PATH = Pattern.compile("(?:[\\w-]+/)*[\\w-]+\\.md");
 
     private volatile WikiIndex cached;
 
@@ -88,8 +90,8 @@ public class WikiService {
 
     /** Raw markdown for an article by its docs-relative path (e.g. "misthos/oromisthio.md"), or null. */
     public String rawMarkdownByPath(String rel) {
-        if (rel == null || rel.isBlank() || rel.contains("..") || rel.contains("\\")) {
-            throw new IllegalArgumentException("invalid path");
+        if (rel == null || !SAFE_REL_PATH.matcher(rel).matches()) {
+            return null; // reject traversal / encoded / unexpected paths -> 404
         }
         try (InputStream in = new ClassPathResource("docs/" + rel).getInputStream();
              BufferedReader r = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8))) {

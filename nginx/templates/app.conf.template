@@ -82,6 +82,12 @@ server {
         add_header X-Cache-Status $upstream_cache_status always;
     }
 
+    # ── Admin endpoints (ingestion) — never exposed publicly. Trigger over the internal network:
+    #    docker compose exec meilisearch curl http://backend:8080/api/admin/ingest
+    location /api/admin/ {
+        deny all;
+    }
+
     # ── Spring backend API (chat, search, calculators) ──────────────────
     location /api/ {
         proxy_pass          http://backend:8080;
@@ -90,7 +96,7 @@ server {
         proxy_set_header    X-Real-IP         $remote_addr;
         proxy_set_header    X-Forwarded-For   $proxy_add_x_forwarded_for;
         proxy_set_header    X-Forwarded-Proto $scheme;
-        proxy_read_timeout  120s;   # LLM responses can take a while
+        proxy_read_timeout  200s;   # multi-step LLM turns (search_articles -> get_article -> answer) can be slow
     }
 
     # ── Angular SPA ─────────────────────────────────────────────────────
@@ -99,6 +105,14 @@ server {
         proxy_set_header Host              $host;
         proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+
+        # Restated so a future add_header here can't silently drop the inherited security headers
+        # (nginx add_header inheritance is all-or-nothing per block).
+        add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload" always;
+        add_header X-Frame-Options DENY always;
+        add_header X-Content-Type-Options nosniff always;
+        add_header X-XSS-Protection "1; mode=block" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
     }
 
     # Meilisearch (7700) is intentionally NOT proxied — internal network only.
