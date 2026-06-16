@@ -37,20 +37,18 @@
 		</dependency>
 		<dependency>
 			<groupId>org.springframework.ai</groupId>
-			<artifactId>spring-ai-advisors-vector-store</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>org.springframework.ai</groupId>
-			<artifactId>spring-ai-markdown-document-reader</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>org.springframework.ai</groupId>
 			<artifactId>spring-ai-starter-model-deepseek</artifactId>
 		</dependency>
+		<!-- Local ONNX sentence-transformer embeddings (all-MiniLM-L6-v2, 384 dims).
+		     Embeds queries/docs for BOTH search backends: Meilisearch (userProvided vectors) and
+		     ChromaDB (the VectorStore embeds internally with this same model). -->
 		<dependency>
 			<groupId>org.springframework.ai</groupId>
 			<artifactId>spring-ai-starter-model-transformers</artifactId>
 		</dependency>
+		<!-- ChromaDB vector store — the alternative chat-RAG backend, selectable at runtime via
+		     app.rag.provider=chroma (Meili-hybrid-vs-Chroma trial). The user /api/search box always
+		     uses Meilisearch. Version managed by the spring-ai-bom. -->
 		<dependency>
 			<groupId>org.springframework.ai</groupId>
 			<artifactId>spring-ai-starter-vector-store-chroma</artifactId>
