@@ -59,22 +59,11 @@ public class RateLimitInterceptor implements HandlerInterceptor {
         return "OPTIONS".equalsIgnoreCase(request.getMethod());
     }
 
-    /**
-     * Real client IP. Behind nginx, {@code getRemoteAddr()} is the proxy, so prefer {@code X-Real-IP}
-     * (set by nginx to the true peer). Trustworthy because in production the backend is reachable only
-     * through nginx (internal network). Falls back to the last {@code X-Forwarded-For} hop (the peer
-     * nginx appended — earlier entries are client-spoofable), then to the socket address (dev/no-proxy).
-     */
-    private static String clientIp(HttpServletRequest request) {
-        String realIp = request.getHeader("X-Real-IP");
-        if (realIp != null && !realIp.isBlank()) {
-            return realIp.trim();
-        }
-        String forwarded = request.getHeader("X-Forwarded-For");
-        if (forwarded != null && !forwarded.isBlank()) {
-            String[] hops = forwarded.split(",");
-            return hops[hops.length - 1].trim();
-        }
-        return request.getRemoteAddr();
+    /** Delegates client-IP resolution (proxy-trust aware) to {@link RateLimitingService}. */
+    private String clientIp(HttpServletRequest request) {
+        return rateLimiter.resolveClientIp(
+                request.getRemoteAddr(),
+                request.getHeader("X-Real-IP"),
+                request.getHeader("X-Forwarded-For"));
     }
 }

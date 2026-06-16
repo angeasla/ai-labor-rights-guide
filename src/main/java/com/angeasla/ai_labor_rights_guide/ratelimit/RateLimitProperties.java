@@ -33,6 +33,15 @@ public class RateLimitProperties {
     /** Multiplier applied to every limit for IPs inside {@link #sharedCidrs}. */
     private double sharedMultiplier = 20.0;
 
+    /**
+     * CIDRs of trusted reverse proxies. Only when the TCP peer ({@code getRemoteAddr()}) is in one of
+     * these do we believe the {@code X-Real-IP}/{@code X-Forwarded-For} headers; otherwise the peer
+     * address is used, so a client hitting the backend directly cannot spoof its IP. Defaults to the
+     * private ranges (the Docker network nginx sits on).
+     */
+    private List<String> trustedProxies = new ArrayList<>(List.of(
+            "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "127.0.0.1/32", "::1/128"));
+
     @Getter
     @Setter
     public static class Chat {

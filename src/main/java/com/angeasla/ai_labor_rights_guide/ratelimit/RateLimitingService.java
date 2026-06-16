@@ -1,5 +1,7 @@
 package com.angeasla.ai_labor_rights_guide.ratelimit;
 
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import io.github.bucket4j.Bandwidth;
 import io.github.bucket4j.Bucket;
 import io.github.bucket4j.ConsumptionProbe;
@@ -8,13 +10,13 @@ import org.springframework.stereotype.Service;
 import java.net.InetAddress;
 import java.time.Duration;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * In-memory per-IP token-bucket rate limiting (bucket4j). Single-node only — buckets live in this
- * JVM's heap; behind one nginx that is exactly right and needs no distributed store.
+ * JVM's heap; behind one nginx that is exactly right and needs no distributed store. Buckets are held
+ * in bounded, self-evicting Caffeine caches (cap + expire-after-access) so the IP map cannot grow
+ * without limit over a long-running deployment.
  *
  * <ul>
  *   <li><b>Chat</b> (expensive LLM calls): a short-term bucket enforces the per-minute burst + the
@@ -24,9 +26,6 @@ import java.util.concurrent.ConcurrentHashMap;
  *   <li><b>Search</b> (cheap, CPU-bound): a single per-minute bucket.</li>
  *   <li><b>Shared IPs</b> (VPN/NAT CIDRs): every limit is multiplied by {@code shared-multiplier}.</li>
  * </ul>
- *
- * <p>Buckets are keyed by IP and never evicted, so the daily count survives across requests; the
- * map is bounded in practice by the number of distinct real client IPs.
  */
 @Service
 public class RateLimitingService {
@@ -41,20 +40,41 @@ public class RateLimitingService {
     private static final String MSG_DAILY_BLOCK = "Υπερβήκατε το ημερήσιο όριο μηνυμάτων. Δοκιμάστε ξανά αργότερα.";
     private static final String MSG_SEARCH_BUSY = "Πάρα πολλές αναζητήσεις. Δοκιμάστε ξανά σε λίγο.";
 
+    /** Hard ceiling on tracked IPs per cache (bounds memory; LRU-evicts the rest). */
+    private static final long MAX_TRACKED_IPS = 100_000;
+
     private final RateLimitProperties props;
     private final AlertService alerts;
     private final List<CidrMatcher> sharedRanges;
+    private final List<CidrMatcher> trustedProxyRanges;
 
-    private final Map<String, Bucket> chatShortTerm = new ConcurrentHashMap<>();
-    private final Map<String, Bucket> chatDaily = new ConcurrentHashMap<>();
-    private final Map<String, Bucket> searchBuckets = new ConcurrentHashMap<>();
+    private final Cache<String, Bucket> chatShortTerm;
+    private final Cache<String, Bucket> chatDaily;
+    private final Cache<String, Bucket> searchBuckets;
     /** IP -> epoch-millis until which chat is blocked (daily-quota cooldown). */
-    private final Map<String, Long> chatBlockedUntil = new ConcurrentHashMap<>();
+    private final Cache<String, Long> chatBlockedUntil;
 
     public RateLimitingService(RateLimitProperties props, AlertService alerts) {
         this.props = props;
         this.alerts = alerts;
-        this.sharedRanges = props.getSharedCidrs().stream()
+        this.sharedRanges = parseCidrs(props.getSharedCidrs());
+        this.trustedProxyRanges = parseCidrs(props.getTrustedProxies());
+
+        // expire-after-access ≥ the relevant window so an idle IP's state is dropped (a fresh bucket =
+        // full tokens anyway), bounding memory. The cooldown cache outlives one block duration.
+        this.chatShortTerm = Caffeine.newBuilder()
+                .maximumSize(MAX_TRACKED_IPS).expireAfterAccess(Duration.ofHours(2)).build();
+        this.chatDaily = Caffeine.newBuilder()
+                .maximumSize(MAX_TRACKED_IPS).expireAfterAccess(Duration.ofHours(26)).build();
+        this.searchBuckets = Caffeine.newBuilder()
+                .maximumSize(MAX_TRACKED_IPS).expireAfterAccess(Duration.ofMinutes(5)).build();
+        this.chatBlockedUntil = Caffeine.newBuilder()
+                .maximumSize(MAX_TRACKED_IPS)
+                .expireAfterWrite(props.getChat().getBlockDuration().plusHours(1)).build();
+    }
+
+    private static List<CidrMatcher> parseCidrs(List<String> cidrs) {
+        return cidrs.stream()
                 .filter(s -> s != null && !s.isBlank())
                 .map(CidrMatcher::parse)
                 .filter(Objects::nonNull)
@@ -68,7 +88,7 @@ public class RateLimitingService {
         long now = System.currentTimeMillis();
 
         // 1) Already in cooldown? Reject without touching the buckets so they refill untouched.
-        Long blockedUntil = chatBlockedUntil.get(ip);
+        Long blockedUntil = chatBlockedUntil.getIfPresent(ip);
         if (blockedUntil != null && blockedUntil > now) {
             return new Decision(false, secondsUntil(blockedUntil, now), MSG_DAILY_BLOCK);
         }
@@ -76,8 +96,7 @@ public class RateLimitingService {
         double mult = multiplierFor(ip);
 
         // 2) Short-term: per-minute burst + per-hour. Common case for casual over-use -> transient 429.
-        ConsumptionProbe shortTerm = chatShortTerm
-                .computeIfAbsent(ip, k -> buildChatShortTerm(mult))
+        ConsumptionProbe shortTerm = chatShortTerm.get(ip, k -> buildChatShortTerm(mult))
                 .tryConsumeAndReturnRemaining(1);
         if (!shortTerm.isConsumed()) {
             return new Decision(false, secondsFromNanos(shortTerm.getNanosToWaitForRefill()), MSG_SLOW_DOWN);
@@ -85,7 +104,7 @@ public class RateLimitingService {
 
         // 3) Daily quota. Exhausting it is the abuse signal -> cooldown + alert (not a ban).
         long dailyCap = scale(props.getChat().getPerDay(), mult);
-        if (!chatDaily.computeIfAbsent(ip, k -> buildChatDaily(mult)).tryConsume(1)) {
+        if (!chatDaily.get(ip, k -> buildChatDaily(mult)).tryConsume(1)) {
             long cooldownSeconds = props.getChat().getBlockDuration().toSeconds();
             chatBlockedUntil.put(ip, now + props.getChat().getBlockDuration().toMillis());
             alerts.chatDailyCapExceeded(ip, dailyCap, cooldownSeconds);
@@ -99,12 +118,29 @@ public class RateLimitingService {
             return Decision.ALLOW;
         }
         double mult = multiplierFor(ip);
-        ConsumptionProbe probe = searchBuckets
-                .computeIfAbsent(ip, k -> buildSearch(mult))
+        ConsumptionProbe probe = searchBuckets.get(ip, k -> buildSearch(mult))
                 .tryConsumeAndReturnRemaining(1);
         return probe.isConsumed()
                 ? Decision.ALLOW
                 : new Decision(false, secondsFromNanos(probe.getNanosToWaitForRefill()), MSG_SEARCH_BUSY);
+    }
+
+    /**
+     * Real client IP. {@code X-Real-IP}/{@code X-Forwarded-For} are trusted ONLY when the TCP peer
+     * ({@code remoteAddr}) is a configured trusted proxy (nginx on the Docker network); otherwise the
+     * peer address is used, so a client reaching the backend directly cannot spoof its IP. When trusted,
+     * {@code X-Real-IP} wins; else the leftmost {@code X-Forwarded-For} hop (the original client).
+     */
+    public String resolveClientIp(String remoteAddr, String xRealIp, String xForwardedFor) {
+        if (isTrustedProxy(remoteAddr)) {
+            if (xRealIp != null && !xRealIp.isBlank()) {
+                return xRealIp.trim();
+            }
+            if (xForwardedFor != null && !xForwardedFor.isBlank()) {
+                return xForwardedFor.split(",")[0].trim();
+            }
+        }
+        return remoteAddr;
     }
 
     // ── Bucket construction ──────────────────────────────────────────────────────────────────────
@@ -144,21 +180,29 @@ public class RateLimitingService {
 
     // ── Helpers ──────────────────────────────────────────────────────────────────────────────────
 
+    private boolean isTrustedProxy(String remoteAddr) {
+        return matchesAny(trustedProxyRanges, remoteAddr);
+    }
+
     private double multiplierFor(String ip) {
-        if (sharedRanges.isEmpty() || ip == null || ip.isBlank()) {
-            return 1.0;
+        return matchesAny(sharedRanges, ip) ? props.getSharedMultiplier() : 1.0;
+    }
+
+    private static boolean matchesAny(List<CidrMatcher> ranges, String ip) {
+        if (ranges.isEmpty() || ip == null || ip.isBlank()) {
+            return false;
         }
         try {
             InetAddress addr = InetAddress.ofLiteral(ip);
-            for (CidrMatcher range : sharedRanges) {
+            for (CidrMatcher range : ranges) {
                 if (range.matches(addr)) {
-                    return props.getSharedMultiplier();
+                    return true;
                 }
             }
         } catch (RuntimeException ignored) {
-            // Not a literal IP (shouldn't happen for getRemoteAddr/X-Real-IP) — treat as non-shared.
+            // Not a literal IP — treat as non-matching.
         }
-        return 1.0;
+        return false;
     }
 
     private static long scale(int base, double multiplier) {
