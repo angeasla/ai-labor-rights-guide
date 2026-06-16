@@ -138,14 +138,20 @@ public final class WageCalculators {
     }
 
     /**
-     * Full overtime/surcharge rate table for a salary (what the UI dialog displays). Night increment is
-     * computed on the legal/minimum wage if supplied, else on the actual wage.
+     * Full overtime/surcharge rate table for a salary (what the UI dialog displays).
+     *
+     * <p><b>Night-premium base (intentional mix):</b> the +25% night increment is reckoned on the
+     * <i>legal/minimum</i> hourly wage ({@code legalMonthlySalary} — the ΣΕΠΕ basis for the night
+     * allowance), while the overtime premiums use the worker's <i>actual</i> hourly wage. So when
+     * {@code legalMonthlySalary} differs from {@code monthlySalary}, {@code totalNightRate}
+     * (= actual hourly + legal-based night increment) deliberately mixes the two bases. When
+     * {@code legalMonthlySalary} is omitted (0) it falls back to the actual wage and the bases coincide.
      */
     public static OvertimeRatesResult overtimeRates(double monthlySalary, double hourlyWage,
                                                     double legalMonthlySalary, boolean sixDay) {
         double hourly = resolveHourly(monthlySalary, hourlyWage, sixDay);
         double legalHourly = legalMonthlySalary > 0 ? resolveHourly(legalMonthlySalary, 0, sixDay) : hourly;
-        double nightIncrement = legalHourly * 0.25;
+        double nightIncrement = legalHourly * 0.25;   // night +25% on the legal/min wage (see javadoc)
         return new OvertimeRatesResult(
                 round2(hourly),
                 round2(hourly * 1.20),   // υπερεργασία +20%
@@ -153,7 +159,7 @@ public final class WageCalculators {
                 round2(hourly * 1.60),   // νόμιμη υπερωρία >150h/yr +60%
                 round2(hourly * 2.20),   // παράνομη υπερωρία +120%
                 round2(nightIncrement),
-                round2(hourly + nightIncrement),
+                round2(hourly + nightIncrement),   // actual hourly + legal-based night increment (mixed base, intentional)
                 round2(hourly * 1.30),   // 6η ημέρα +30% (per hour)
                 round2(hourly * 1.40));  // 6η ημέρα συνεχούς λειτουργίας +40% (per hour)
     }
