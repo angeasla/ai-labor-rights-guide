@@ -116,11 +116,12 @@ the pass condition. Prompts are Greek (the assistant refuses non–labor-law top
 ### B. Calculation — expect one calculator tool; number must equal the REST result
 | # | Prompt | Expected tool | REST cross-check |
 |---|---|---|---|
-| B1 | `Μεικτός μισθός 1300€, 2 παιδιά, 14 μισθοί — πόσα καθαρά τον μήνα;` | `grossToNet` | `POST /api/calc/gross-to-net {"gross":1300,"children":2,"months":14,"disability":false}` |
+| B1 | `Μεικτός μισθός 1300€, 2 παιδιά, 14 μισθοί — πόσα καθαρά τον μήνα;` | `grossToNet` | `POST /api/calc/gross-to-net {"gross":1300,"children":2,"months":14,"disability":false,"age":35}` |
 | B2 | `Δουλεύω 7 χρόνια με μισθό 1200€ — πόση αποζημίωση απόλυσης χωρίς προειδοποίηση;` | `severance` | `POST /api/calc/severance {"grossMonthly":1200,"years":7,"withNotice":false}` |
 | B3 | `Μισθός 1500€, 10 ώρες νόμιμης υπερωρίας — πόσα παίρνω;` | `overtime` | `POST /api/calc/overtime {"monthlySalary":1500,"hourlyWage":0,"hours":10,"type":"LEGAL","sunday":false,"night":false,"sixDay":false}` |
 | B4 | `Μισθός 1200€, δούλεψα όλη την περίοδο — πόσο Δώρο Χριστουγέννων;` | `christmasBonus` | `POST /api/calc/xmas-bonus {"monthlySalary":1200,"workedDays":245}` |
 | B5 | `20 χρόνια ασφάλισης, μέσος μισθός 1400€ — πόση ανταποδοτική σύνταξη;` | `contributoryPension` | `POST /api/calc/contributory-pension {"pensionableEarnings":1400,"insuranceYears":20}` |
+| B6 | `Είμαι 24 ετών, μικτός μισθός 1500€ — πόσα καθαρά;` | `grossToNet` (passes `age`) | `POST /api/calc/gross-to-net {"gross":1500,"children":0,"months":14,"disability":false,"age":24}` → net **1299.45**, φόρος **0** (2026 αφορολόγητο νέων ≤25). Confirms the age param reaches the tool and the youth bracket fires (vs €1164.79 / €134.66 tax for an adult). |
 
 > The chat's euro figure must equal the REST `…Result` to the cent, and the REST result must match the
 > vector in `CALCULATOR_SPECS.md`. Any mismatch = fail (model computed inline).
