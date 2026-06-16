@@ -4,6 +4,10 @@ target/
 !**/src/main/**/target/
 !**/src/test/**/target/
 
+# Local embedding model (~90 MB ONNX) — provided per-machine, never committed.
+# Fetch with scripts/fetch-embedding-model.* ; tokenizer.json is bundled in the dependency jar.
+/models/
+
 ### STS ###
 .apt_generated
 .classpath
