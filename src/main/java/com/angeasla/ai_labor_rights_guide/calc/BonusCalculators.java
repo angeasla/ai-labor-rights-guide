@@ -60,7 +60,8 @@ public final class BonusCalculators {
             return withIncrement(monthlySalary, XMAS_MAX_UNITS);
         }
         double units = Math.min((workedDays / (double) XMAS_BLOCK) * 2, XMAS_MAX_UNITS);
-        double base = (workedDays / (double) XMAS_BLOCK) * (monthlySalary * 2.0 / 25.0);
+        // Cap the base at one monthly salary so the 238–244-day band can't exceed the full-period bonus.
+        double base = Math.min((workedDays / (double) XMAS_BLOCK) * (monthlySalary * 2.0 / 25.0), monthlySalary);
         return withIncrement(base, units);
     }
 

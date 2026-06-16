@@ -34,6 +34,8 @@ public final class LeaveCalculators {
 
     /** Two-layer max model: base statutory ladder vs the EGSSE tenure tiers. */
     public static LeaveDaysResult leaveDays(int workWeek, int tenureMonths, int totalCareerYears) {
+        tenureMonths = Math.max(0, tenureMonths);
+        totalCareerYears = Math.max(0, totalCareerYears);
         int base = (workWeek == 6) ? 24 : 20;
         int baseLadder;
         if (tenureMonths < 12) {
@@ -62,9 +64,10 @@ public final class LeaveCalculators {
     // ---- Part-time annual leave (ratio model) ----
 
     public static PartTimeLeaveResult partTimeLeave(int fullTimeDays, double ptRatio) {
+        int safeFull = Math.max(0, fullTimeDays);
         double ratio = Math.max(0, Math.min(1.0, ptRatio));
-        double exact = fullTimeDays * ratio;
-        int days = (int) Math.min(fullTimeDays, Math.round(exact));
+        double exact = safeFull * ratio;
+        int days = (int) Math.min(safeFull, Math.round(exact));
         return new PartTimeLeaveResult(days, exact);
     }
 
@@ -74,6 +77,7 @@ public final class LeaveCalculators {
         if (amount <= 0) {
             throw new IllegalArgumentException("amount must be > 0");
         }
+        leaveDays = Math.max(0, leaveDays);
         double paidDays = (workWeek == 5) ? leaveDays * 1.2 : leaveDays;
         double leavePay;
         double cap;

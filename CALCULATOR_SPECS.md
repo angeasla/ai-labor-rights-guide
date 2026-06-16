@@ -35,7 +35,7 @@ net→gross: bisection on `[target, target/(1-0.1337-0.44)]` until `|net-target|
 Test vectors (age≥30, disability off, 2026 law):
 | gross | children | months | → net / efka / tax |
 |---|---|---|---|
-| 920 | 0 | 14 | 780.86 / 122.90 / 16.24 |
+| 920 | 0 | 14 | 771.67 / 123.00 / 25.33 |
 | 1500 | 0 | 14 | 1164.79 / 200.55 / 134.66 |
 | 2500 | 2 | 14 | 1818.94 / 334.25 / 346.81 |
 | 5000 | 0 | 12 | 3200.55 / 668.50 / 1130.95 |

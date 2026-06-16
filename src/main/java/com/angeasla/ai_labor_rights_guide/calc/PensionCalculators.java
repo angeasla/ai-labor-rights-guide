@@ -18,6 +18,9 @@ public final class PensionCalculators {
     }
 
     public static NationalPensionResult nationalPension(int insuranceYears, int residenceYears, int retirementAge) {
+        insuranceYears = Math.max(0, insuranceYears);
+        residenceYears = Math.max(0, Math.min(residenceYears, PENSION_FULL_RESIDENCE_YEARS));
+        retirementAge = Math.max(0, retirementAge);
         if (insuranceYears < PENSION_MIN_INSURANCE_YEARS) {
             return new NationalPensionResult(0.0, true);
         }
