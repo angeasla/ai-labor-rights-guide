@@ -47,7 +47,8 @@ public class ChromaRagRetriever implements RagRetriever {
                     str(m.get("title")),
                     str(m.get("url")),
                     str(m.getOrDefault("categoryLabel", m.get("category"))),
-                    str(m.get("excerpt"))));
+                    str(m.get("excerpt")),
+                    str(m.get("slug"))));
         }
         return out;
     }

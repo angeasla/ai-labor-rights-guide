@@ -26,7 +26,7 @@ public class SearchService {
             String title = str(formatted != null ? formatted.get("title") : hit.get("title"));
             String excerpt = str(formatted != null ? formatted.get("excerpt") : hit.get("excerpt"));
             String category = str(hit.getOrDefault("categoryLabel", hit.get("category")));
-            out.add(new SearchResult(title, str(hit.get("url")), category, excerpt));
+            out.add(new SearchResult(title, str(hit.get("url")), category, excerpt, str(hit.get("slug"))));
         }
         return out;
     }

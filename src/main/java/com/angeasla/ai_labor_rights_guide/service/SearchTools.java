@@ -33,7 +33,7 @@ public class SearchTools {
 
     @Tool(name = "get_article", description = "Επιστρέφει το πλήρες κείμενο ενός άρθρου με βάση το slug (π.χ. 'misthos/oromisthio'). Χρησιμοποίησέ το μετά την αναζήτηση για να διαβάσεις το πλήρες άρθρο και να τεκμηριώσεις την απάντησή σου με παραπομπή.")
     public ArticleContent getArticle(
-            @ToolParam(description = "Το slug του άρθρου, όπως επιστρέφεται από το search_articles (το url χωρίς το '#/')") String slug) {
+            @ToolParam(description = "Το slug του άρθρου από το πεδίο 'slug' του search_articles (π.χ. 'misthos/oromisthio')") String slug) {
         return retriever.getArticle(slug);
     }
 }
