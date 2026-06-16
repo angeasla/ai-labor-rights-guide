@@ -65,6 +65,10 @@ class LeaveBonusCalculatorTest {
         assertEquals(750.00, BonusCalculators.easterDaily(48, 120).amount(), EPS);      // 15 units
         assertEquals(400.00, BonusCalculators.easterDaily(48, 64).amount(), EPS);       // 8 units
         assertEquals(750.00, BonusCalculators.easterHourly(1440, 30, 120).amount(), EPS);
+
+        // Leap year (2024): Jan 1–Apr 30 = 121 days, so 120 worked days is just under full.
+        assertEquals(516.53, BonusCalculators.easterSalaried(1000, 120, 2024).amount(), EPS);
+        assertEquals(520.83, BonusCalculators.easterSalaried(1000, 121, 2024).amount(), EPS); // full leap period
     }
 
     // ---- Christmas bonus (/19 rule) ----
@@ -76,6 +80,7 @@ class LeaveBonusCalculatorTest {
         assertEquals(1250.00, BonusCalculators.christmasDaily(48, 245).amount(), EPS);     // cap 25 units
         assertEquals(500.00, BonusCalculators.christmasDaily(48, 95).amount(), EPS);       // 10 units
         assertEquals(1250.00, BonusCalculators.christmasHourly(1440, 30, 245).amount(), EPS);
+        assertEquals(500.00, BonusCalculators.christmasHourly(1440, 30, 95).amount(), EPS);   // partial: 10 units
     }
 
     // ---- Orthodox Easter date ----

@@ -29,9 +29,21 @@ public final class BonusCalculators {
 
     // ---- Easter (period 1 Jan – 30 Apr) ----
 
-    /** Salaried: full bonus = ½ monthly salary, prorated by worked days over 120. */
+    /** Days in the Easter reference period (Jan 1 – Apr 30) for a year — 121 in leap years, else 120. */
+    public static int easterPeriodDays(int year) {
+        return java.time.Year.isLeap(year) ? 121 : 120;
+    }
+
+    /** Salaried, common-year (120-day) period — pass the year for leap-year accuracy. */
     public static BonusResult easterSalaried(double monthlySalary, int workedDays) {
-        double ratio = Math.min(workedDays / (double) EASTER_FULL_DAYS, 1.0);
+        return easterSalaried(monthlySalary, workedDays, 0);
+    }
+
+    /** Salaried: full bonus = ½ monthly salary, prorated by worked days over the Jan 1–Apr 30 period
+     *  ({@code year>0} ⇒ leap-aware length; {@code year<=0} ⇒ the common-year 120-day default). */
+    public static BonusResult easterSalaried(double monthlySalary, int workedDays, int year) {
+        int periodDays = (year > 0) ? easterPeriodDays(year) : EASTER_FULL_DAYS;
+        double ratio = Math.min(workedDays / (double) periodDays, 1.0);
         double base = monthlySalary * 0.5 * ratio;
         return withIncrement(base, ratio * EASTER_MAX_UNITS);
     }

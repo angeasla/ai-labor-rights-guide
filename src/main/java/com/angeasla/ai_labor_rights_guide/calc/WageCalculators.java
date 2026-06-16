@@ -55,7 +55,10 @@ public final class WageCalculators {
         if (monthlyGross <= 0) {
             throw new IllegalArgumentException("monthlyGross must be > 0");
         }
-        int mult = (months == 12) ? 12 : 14;
+        if (months != 12 && months != 14) {
+            throw new IllegalArgumentException("months must be 12 or 14");
+        }
+        int mult = months;
         double monthlyEfka = Math.min(monthlyGross, EFKA_MONTHLY_CEILING) * EFKA_EMPLOYEE_RATE;
         double annualGross = monthlyGross * mult;
         double annualEfka = monthlyEfka * mult;

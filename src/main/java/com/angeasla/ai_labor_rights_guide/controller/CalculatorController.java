@@ -61,7 +61,8 @@ public class CalculatorController {
 
     @PostMapping("/easter-bonus")
     public BonusCalculators.BonusResult easterBonus(@RequestBody SalariedBonusRequest r) {
-        return BonusCalculators.easterSalaried(r.monthlySalary(), r.workedDays());
+        int year = r.year() > 0 ? r.year() : LocalDate.now().getYear();
+        return BonusCalculators.easterSalaried(r.monthlySalary(), r.workedDays(), year);
     }
 
     @PostMapping("/easter-part-time")
@@ -139,7 +140,7 @@ public class CalculatorController {
                                        double legalMonthlySalary, boolean sixDay) {
     }
 
-    public record SalariedBonusRequest(double monthlySalary, int workedDays) {
+    public record SalariedBonusRequest(double monthlySalary, int workedDays, int year) {
     }
 
     public record DailyBonusRequest(double dailyWage, int workedDays) {

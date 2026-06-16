@@ -91,8 +91,8 @@ public class CalculatorTools {
     @Tool(description = "Υπολογίζει το Δώρο Πάσχα για μισθωτό (ΑΝ 435/1968). Χρησιμοποίησε ΠΑΝΤΑ αυτό το εργαλείο — μην υπολογίζεις εσύ.")
     public BonusCalculators.BonusResult easterBonus(
             @ToolParam(description = "Μηνιαίος μισθός σε ευρώ") double monthlySalary,
-            @ToolParam(description = "Ημερολογιακές ημέρες εργασίας στην περίοδο 1/1–30/4 (μέγιστο 120)") int workedDays) {
-        return BonusCalculators.easterSalaried(monthlySalary, workedDays);
+            @ToolParam(description = "Ημερολογιακές ημέρες εργασίας στην περίοδο 1/1–30/4 (μέγιστο 120· 121 σε δίσεκτο έτος)") int workedDays) {
+        return BonusCalculators.easterSalaried(monthlySalary, workedDays, java.time.Year.now().getValue());
     }
 
     @Tool(description = "Υπολογίζει το Δώρο Πάσχα για ημερομίσθιο/μερικής απασχόλησης. Χρησιμοποίησε ΠΑΝΤΑ αυτό το εργαλείο — μην υπολογίζεις εσύ.")
