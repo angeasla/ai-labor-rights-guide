@@ -105,6 +105,16 @@ public class CalculatorController {
         return PensionCalculators.contributoryPension(r.pensionableEarnings(), r.insuranceYears());
     }
 
+    @PostMapping("/unemployment")
+    public UnemploymentCalculator.UnemploymentResult unemployment(@RequestBody UnemploymentRequest r) {
+        return UnemploymentCalculator.unemployment(r.avgMonthlySalary(), r.insuredDays());
+    }
+
+    @PostMapping("/retirement-severance")
+    public SeveranceCalculator.RetirementSeveranceResult retirementSeverance(@RequestBody RetirementSeveranceRequest r) {
+        return SeveranceCalculator.retirementSeverance(r.monthlySalary(), r.hireDate(), r.regime());
+    }
+
     // ---- request bodies ----
 
     public record GrossResult(double gross) {
@@ -157,5 +167,12 @@ public class CalculatorController {
     }
 
     public record ContributoryPensionRequest(double pensionableEarnings, int insuranceYears) {
+    }
+
+    public record UnemploymentRequest(double avgMonthlySalary, int insuredDays) {
+    }
+
+    public record RetirementSeveranceRequest(double monthlySalary, LocalDate hireDate,
+                                             SeveranceCalculator.RetirementRegime regime) {
     }
 }

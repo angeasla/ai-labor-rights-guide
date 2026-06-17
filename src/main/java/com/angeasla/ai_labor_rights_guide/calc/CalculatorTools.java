@@ -155,4 +155,19 @@ public class CalculatorTools {
             @ToolParam(description = "Έτη ασφάλισης (ΕΦΚΑ)") int insuranceYears) {
         return PensionCalculators.contributoryPension(pensionableEarnings, insuranceYears);
     }
+
+    @Tool(description = "Υπολογίζει το επίδομα ανεργίας και τη διάρκεια επιδότησης (ΔΥΠΑ, Ν.1545/1985). Χρησιμοποίησε ΠΑΝΤΑ αυτό το εργαλείο για ερωτήσεις περί επιδόματος ανεργίας — μην υπολογίζεις εσύ.")
+    public UnemploymentCalculator.UnemploymentResult unemployment(
+            @ToolParam(description = "Μέσος μηνιαίος μισθός σε ευρώ") double avgMonthlySalary,
+            @ToolParam(description = "Ημέρες ασφάλισης στο τελευταίο 14μηνο, ελάχιστο 125") int insuredDays) {
+        return UnemploymentCalculator.unemployment(avgMonthlySalary, insuredDays);
+    }
+
+    @Tool(description = "Υπολογίζει την αποζημίωση οικειοθελούς αποχώρησης λόγω συνταξιοδότησης (Ν.2112/1920, Ν.3863/2010, Ν.4093/2012 αρ.74). ΔΙΑΦΕΡΕΙ από την αποζημίωση απόλυσης. Χρησιμοποίησε ΠΑΝΤΑ αυτό το εργαλείο — μην υπολογίζεις εσύ.")
+    public SeveranceCalculator.RetirementSeveranceResult retirementSeverance(
+            @ToolParam(description = "Μηνιαίος μισθός σε ευρώ") double monthlySalary,
+            @ToolParam(description = "Ημερομηνία πρόσληψης, μορφή YYYY-MM-DD") LocalDate hireDate,
+            @ToolParam(description = "OLD ή NEW· κενό για αυτόματη επιλογή βάσει ημερομηνίας") SeveranceCalculator.RetirementRegime regime) {
+        return SeveranceCalculator.retirementSeverance(monthlySalary, hireDate, regime);
+    }
 }

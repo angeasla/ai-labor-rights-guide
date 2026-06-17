@@ -2,6 +2,7 @@ package com.angeasla.ai_labor_rights_guide.calc;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDate;
 
 /**
  * Central, year-versioned constants and shared helpers for all labor-law calculators.
@@ -45,6 +46,21 @@ public final class CalcConstants {
     // --- Severance ---
     public static final double SEVERANCE_HOLIDAY_UPLIFT = 14.0 / 12.0; // 1/6 προσαύξηση for δώρα + επίδομα αδείας
     public static final double SEVERANCE_WITH_NOTICE_FACTOR = 0.5;
+
+    // --- Voluntary-retirement severance (Ν.2112/1920, Ν.3863/2010, Ν.4093/2012 αρ.74) ---
+    // Hire date on-or-before this cutoff → OLD regime, after → NEW regime.
+    public static final LocalDate RETIREMENT_REGIME_CUTOFF = LocalDate.of(2010, 6, 17);
+    // ≥17 years of service → full (×1.0) retirement factor, otherwise half (×0.5).
+    public static final int RETIREMENT_FULL_FACTOR_YEARS = 17;
+
+    // --- Unemployment benefit (ΔΥΠΑ, Ν.1545/1985, ΥΑ 35186/929/1999) ---
+    public static final double UNEMP_REPLACEMENT_RATE = 0.55;
+    public static final int UNEMP_DAYS_PER_MONTH = 25;
+    public static final int UNEMP_ANNUAL_TO_DAILY = 300;
+    // ΔΥΠΑ 2024 values.
+    public static final double UNEMP_BENEFIT_FLOOR = 416.0;
+    public static final double UNEMP_BENEFIT_CAP = 509.0;
+    public static final int UNEMP_MIN_INSURED_DAYS = 125;
 
     // --- Pensions ---
     public static final double NATIONAL_PENSION_BASE_2026 = 446.86;
