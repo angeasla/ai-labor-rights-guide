@@ -6,6 +6,7 @@ import com.angeasla.ai_labor_rights_guide.dto.ChatRequestDto;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.client.advisor.SimpleLoggerAdvisor;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.UserMessage;
@@ -51,6 +52,7 @@ public class AiChatService {
         this.chatClient = chatClientBuilder
                 .defaultSystem(prompt)
                 .defaultTools(calculatorTools, searchTools)
+                .defaultAdvisors(new SimpleLoggerAdvisor())
                 .build();
     }
 

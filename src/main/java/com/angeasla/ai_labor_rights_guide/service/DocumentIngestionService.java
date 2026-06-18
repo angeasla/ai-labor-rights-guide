@@ -181,14 +181,16 @@ public class DocumentIngestionService {
             // collection exists — nothing to do
         } catch (Exception notFound) {
             try {
+                // Raw JSON string — avoids any Jackson-version sensitivity on the RestClient serializer.
+                String body = "{\"name\":\"" + chromaCollection.replace("\"", "\\\"") + "\",\"metadata\":{}}";
                 chromaDirectClient.post()
                         .uri("/api/v1/collections")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .body(Map.of("name", chromaCollection, "metadata", Map.of()))
+                        .body(body)
                         .retrieve().toBodilessEntity();
                 log.info("Created Chroma collection '{}'", chromaCollection);
             } catch (Exception ex) {
-                log.debug("Chroma collection pre-create skipped (unreachable or already exists): {}", ex.getMessage());
+                log.warn("Chroma collection pre-create failed: {}", ex.getMessage());
             }
         }
     }
