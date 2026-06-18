@@ -5,9 +5,12 @@ import org.slf4j.LoggerFactory;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestClient;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
@@ -50,10 +53,21 @@ public class DocumentIngestionService {
     private final MeilisearchService meili;
     /** Optional — present only when the Chroma vector-store starter is configured/reachable. */
     private final ObjectProvider<VectorStore> chromaVectorStore;
+    /** Direct REST client used to pre-create the Chroma collection (workaround: Spring AI M6
+     *  ChromaVectorStore.afterPropertiesSet calls getCollection unconditionally, before initialize-schema
+     *  can take effect, so the bean fails to init on first run when the collection doesn't exist yet). */
+    private final RestClient chromaDirectClient;
+    private final String chromaCollection;
 
-    public DocumentIngestionService(MeilisearchService meili, ObjectProvider<VectorStore> chromaVectorStore) {
+    public DocumentIngestionService(MeilisearchService meili,
+                                    ObjectProvider<VectorStore> chromaVectorStore,
+                                    @Value("${spring.ai.vectorstore.chroma.client.host:http://localhost}") String chromaHost,
+                                    @Value("${spring.ai.vectorstore.chroma.client.port:8000}") int chromaPort,
+                                    @Value("${spring.ai.vectorstore.chroma.collection-name:labor_guide_v3}") String chromaCollection) {
         this.meili = meili;
         this.chromaVectorStore = chromaVectorStore;
+        this.chromaDirectClient = RestClient.create(chromaHost + ":" + chromaPort);
+        this.chromaCollection = chromaCollection;
     }
 
     public String ingestData() {
@@ -124,9 +138,22 @@ public class DocumentIngestionService {
     /**
      * Best-effort upsert into Chroma (delete-by-id then add, so it is idempotent). Returns a short
      * status suffix. Never throws — if Chroma is absent or down, the Meili ingest above still succeeds.
+     *
+     * <p>Workaround: Spring AI 2.0.0-M6 {@code ChromaVectorStore.afterPropertiesSet} calls
+     * {@code getCollection()} before honouring {@code initialize-schema}, so the bean fails to initialise
+     * on the very first run when the collection doesn't exist yet. We pre-create the collection via a
+     * direct REST call so the bean's own init succeeds and {@code initialize-schema=true} can take over
+     * for subsequent startups.
      */
     private String indexIntoChroma(List<Document> chromaDocs) {
-        VectorStore vectorStore = chromaVectorStore.getIfAvailable();
+        ensureChromaCollection();
+        VectorStore vectorStore;
+        try {
+            vectorStore = chromaVectorStore.getIfAvailable();
+        } catch (Exception e) {
+            log.warn("Chroma VectorStore init failed (collection may still be missing): {}", e.getMessage());
+            return " Chroma unavailable — skipped.";
+        }
         if (vectorStore == null) {
             return " Chroma not configured — skipped.";
         }
@@ -142,6 +169,27 @@ public class DocumentIngestionService {
         } catch (Exception e) {
             log.warn("Chroma ingestion skipped: {}", e.getMessage());
             return " Chroma ingestion skipped (" + e.getMessage() + ").";
+        }
+    }
+
+    /** Creates the Chroma collection if it doesn't exist. Silently skips when ChromaDB is unreachable. */
+    private void ensureChromaCollection() {
+        try {
+            chromaDirectClient.get()
+                    .uri("/api/v1/collections/{name}", chromaCollection)
+                    .retrieve().toBodilessEntity();
+            // collection exists — nothing to do
+        } catch (Exception notFound) {
+            try {
+                chromaDirectClient.post()
+                        .uri("/api/v1/collections")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body(Map.of("name", chromaCollection, "metadata", Map.of()))
+                        .retrieve().toBodilessEntity();
+                log.info("Created Chroma collection '{}'", chromaCollection);
+            } catch (Exception ex) {
+                log.debug("Chroma collection pre-create skipped (unreachable or already exists): {}", ex.getMessage());
+            }
         }
     }
 
