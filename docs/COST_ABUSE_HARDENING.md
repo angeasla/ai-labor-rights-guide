@@ -4,13 +4,7 @@ Session record of the LLM cost-control / abuse-mitigation work on the AI chatbot
 and frontend, plus the supporting verification tooling. Companion to `MERGE_PR_PLAN.md`.
 
 - **Date:** 2026-06-15
-- **Repos touched** (both are working copies, **not git repos locally** — changes must be
-  applied into the real upstream repos and committed there):
-  - Backend — `ai-labor-rights-guide`
-    (Spring Boot 4, Spring AI 2.0.0-M6, Java 25, virtual threads; LLM = DeepSeek `deepseek-chat`)
-  - Frontend — `Angular-frontend` (Angular, ngx-markdown)
-  - Planning docs — `worker-rights-guide` (this repo)
-- **Nothing is committed.** The backend is not even `git init`-ed locally.
+- **Repos:** `ai-labor-rights-guide` (Spring Boot 4, Spring AI 2.0.0-M6, Java 25, virtual threads; LLM = DeepSeek `deepseek-chat`), `Angular-frontend` (Angular, ngx-markdown)
 
 ---
 
