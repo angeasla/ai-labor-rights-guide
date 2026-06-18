@@ -182,7 +182,7 @@ public class DocumentIngestionService {
         } catch (Exception notFound) {
             try {
                 // Raw JSON string — avoids any Jackson-version sensitivity on the RestClient serializer.
-                String body = "{\"name\":\"" + chromaCollection.replace("\"", "\\\"") + "\",\"metadata\":{}}";
+                String body = "{\"name\":\"" + chromaCollection.replace("\"", "\\\"") + "\"}";
                 chromaDirectClient.post()
                         .uri("/api/v1/collections")
                         .contentType(MediaType.APPLICATION_JSON)
