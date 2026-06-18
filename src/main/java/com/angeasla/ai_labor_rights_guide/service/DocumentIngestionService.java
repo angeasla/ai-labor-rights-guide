@@ -2,15 +2,14 @@ package com.angeasla.ai_labor_rights_guide.service;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.ai.chroma.vectorstore.ChromaApi;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
-import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestClient;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
@@ -53,20 +52,22 @@ public class DocumentIngestionService {
     private final MeilisearchService meili;
     /** Optional — present only when the Chroma vector-store starter is configured/reachable. */
     private final ObjectProvider<VectorStore> chromaVectorStore;
-    /** Direct REST client used to pre-create the Chroma collection (workaround: Spring AI M6
-     *  ChromaVectorStore.afterPropertiesSet calls getCollection unconditionally, before initialize-schema
-     *  can take effect, so the bean fails to init on first run when the collection doesn't exist yet). */
-    private final RestClient chromaDirectClient;
+    /**
+     * The same {@link ChromaApi} bean that {@code ChromaVectorStore} uses internally (registered by
+     * {@code ChromaVectorStoreAutoConfiguration}). Using it directly — rather than our own RestClient —
+     * guarantees the exact same URL format, tenant/database query params (Chroma 0.6+), and auth headers,
+     * so that collections we create here are visible to the VectorStore's own {@code afterPropertiesSet}.
+     */
+    private final ObjectProvider<ChromaApi> chromaApiProvider;
     private final String chromaCollection;
 
     public DocumentIngestionService(MeilisearchService meili,
                                     ObjectProvider<VectorStore> chromaVectorStore,
-                                    @Value("${spring.ai.vectorstore.chroma.client.host:http://localhost}") String chromaHost,
-                                    @Value("${spring.ai.vectorstore.chroma.client.port:8000}") int chromaPort,
+                                    ObjectProvider<ChromaApi> chromaApiProvider,
                                     @Value("${spring.ai.vectorstore.chroma.collection-name:labor_guide_v3}") String chromaCollection) {
         this.meili = meili;
         this.chromaVectorStore = chromaVectorStore;
-        this.chromaDirectClient = RestClient.create(chromaHost + ":" + chromaPort);
+        this.chromaApiProvider = chromaApiProvider;
         this.chromaCollection = chromaCollection;
     }
 
@@ -172,22 +173,21 @@ public class DocumentIngestionService {
         }
     }
 
-    /** Creates the Chroma collection if it doesn't exist. Silently skips when ChromaDB is unreachable. */
+    /**
+     * Creates the Chroma collection if it doesn't exist, using the same {@link ChromaApi} instance that
+     * {@code ChromaVectorStore} uses. This guarantees the same tenant/database context (Chroma 0.6+) and
+     * auth, so the collection is visible when {@code afterPropertiesSet} calls {@code getCollection()}.
+     */
     private void ensureChromaCollection() {
+        ChromaApi api = chromaApiProvider.getIfAvailable();
+        if (api == null) {
+            return;
+        }
         try {
-            chromaDirectClient.get()
-                    .uri("/api/v1/collections/{name}", chromaCollection)
-                    .retrieve().toBodilessEntity();
-            // collection exists — nothing to do
+            api.getCollection(chromaCollection);
         } catch (Exception notFound) {
             try {
-                // Raw JSON string — avoids any Jackson-version sensitivity on the RestClient serializer.
-                String body = "{\"name\":\"" + chromaCollection.replace("\"", "\\\"") + "\"}";
-                chromaDirectClient.post()
-                        .uri("/api/v1/collections")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .body(body)
-                        .retrieve().toBodilessEntity();
+                api.createCollection(new ChromaApi.CreateCollectionRequest(chromaCollection, null));
                 log.info("Created Chroma collection '{}'", chromaCollection);
             } catch (Exception ex) {
                 log.warn("Chroma collection pre-create failed: {}", ex.getMessage());
