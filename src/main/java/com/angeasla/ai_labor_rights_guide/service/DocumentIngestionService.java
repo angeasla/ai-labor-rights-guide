@@ -61,14 +61,21 @@ public class DocumentIngestionService {
     private final ObjectProvider<ChromaApi> chromaApiProvider;
     private final String chromaCollection;
 
+    private final String chromaTenant;
+    private final String chromaDatabase;
+
     public DocumentIngestionService(MeilisearchService meili,
                                     ObjectProvider<VectorStore> chromaVectorStore,
                                     ObjectProvider<ChromaApi> chromaApiProvider,
-                                    @Value("${spring.ai.vectorstore.chroma.collection-name:labor_guide_v3}") String chromaCollection) {
+                                    @Value("${spring.ai.vectorstore.chroma.collection-name:labor_guide_v3}") String chromaCollection,
+                                    @Value("${spring.ai.vectorstore.chroma.tenant:default_tenant}") String chromaTenant,
+                                    @Value("${spring.ai.vectorstore.chroma.database:default_database}") String chromaDatabase) {
         this.meili = meili;
         this.chromaVectorStore = chromaVectorStore;
         this.chromaApiProvider = chromaApiProvider;
         this.chromaCollection = chromaCollection;
+        this.chromaTenant = chromaTenant;
+        this.chromaDatabase = chromaDatabase;
     }
 
     public String ingestData() {
@@ -184,10 +191,11 @@ public class DocumentIngestionService {
             return;
         }
         try {
-            api.getCollection(chromaCollection);
+            api.getCollection(chromaTenant, chromaDatabase, chromaCollection);
         } catch (Exception notFound) {
             try {
-                api.createCollection(new ChromaApi.CreateCollectionRequest(chromaCollection, null));
+                api.createCollection(chromaTenant, chromaDatabase,
+                        new ChromaApi.CreateCollectionRequest(chromaCollection, null));
                 log.info("Created Chroma collection '{}'", chromaCollection);
             } catch (Exception ex) {
                 log.warn("Chroma collection pre-create failed: {}", ex.getMessage());
