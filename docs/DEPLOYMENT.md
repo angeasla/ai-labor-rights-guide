@@ -15,8 +15,8 @@ hybrid search + wiki), Meilisearch, ChromaDB, the Angular frontend, and nginx/TL
 | Service | Image / source | Port (prod) | Exposed? | Role |
 |---|---|---|---|---|
 | `nginx` | nginx:alpine | 80/443 | **public** | TLS termination, reverse proxy, wiki cache, static SPA |
-| `frontend` | built from `../Angular-frontend` | 80 (internal) | no | Angular SPA (served by nginx) |
-| `backend` | built from this repo (`Dockerfile`) | 8080 (internal) | no | Chat, calculators, search, wiki, ingestion |
+| `frontend` | GHCR release image | 80 (internal) | no | Angular SPA (served by nginx) |
+| `backend` | GHCR release image | 8080 (internal) | no | Chat, calculators, search, wiki, ingestion |
 | `meilisearch` | getmeili/meilisearch:v1.12 | 7700 (internal) | no | Search box + (default) chat RAG |
 | `chromadb` | chromadb/chroma:0.6.3 | 8000 (internal) | no | Alternative chat RAG |
 | `certbot` | certbot/certbot | — | no | Let's Encrypt renewal |
@@ -41,14 +41,16 @@ Dev (`docker-compose.yml`) exposes 8080/7700/8000/4200 directly and skips nginx/
 ## 2. Prerequisites
 
 - **Docker Engine + Compose v2.**
-- The **Angular frontend repo checked out as a sibling directory** — both compose files build it from
-  `../Angular-frontend`. Layout:
+- **Dev only:** the **Angular frontend repo checked out as a sibling directory** — the dev compose file
+  builds it from `../Angular-frontend`. Production pulls the published GHCR images instead. Layout:
   ```
   projects/
   ├── ai-labor-rights-guide/      ← this repo (run compose from here)
   └── Angular-frontend/
   ```
 - A **DeepSeek API key** (https://platform.deepseek.com).
+- **Prod only:** access to the GHCR packages. If they are private, authenticate the server first with a
+  GitHub token that has `read:packages`: `echo "$CR_PAT" | docker login ghcr.io -u <github-user> --password-stdin`.
 - The **ONNX embedding model file** (~90 MB) — fetched once (§4.3). The tokenizer is bundled in a
   dependency jar; only the model needs providing.
 - **Prod only:** a domain's A/AAAA record pointing at the server, for Let's Encrypt.
@@ -60,12 +62,13 @@ Dev (`docker-compose.yml`) exposes 8080/7700/8000/4200 directly and skips nginx/
 ## 3. TL;DR (production)
 
 ```bash
-# 0. both repos side by side (see §2), then:
+# 0. production checkout (the frontend checkout is only needed for dev), then:
 cd ai-labor-rights-guide
-cp .env.example .env && $EDITOR .env          # §4.2 — fill the secrets
+cp .env.example .env && $EDITOR .env          # §4.2 — fill secrets and release image tags
 bash scripts/fetch-embedding-model.sh          # §4.3 — run where there is internet → ./models
 bash scripts/init-ssl.sh                        # §4.4 — one-time TLS bootstrap
-docker compose -f docker-compose.prod.yml up -d --build
+docker compose -f docker-compose.prod.yml pull
+docker compose -f docker-compose.prod.yml up -d
 # index the guide into BOTH engines (run curl from the meili container, on the internal network):
 docker compose -f docker-compose.prod.yml exec meilisearch \
   curl -s -X POST http://backend:8080/api/admin/ingest
@@ -95,6 +98,8 @@ Clone this repo and `Angular-frontend` as siblings (§2). Run all `docker compos
 | `DEEPSEEK_API_KEY` | Your DeepSeek key. Required for chat (calculators/search/wiki work without it). |
 | `MEILI_MASTER_KEY` | A strong random secret: `openssl rand -base64 32`. Used by Meili and the backend. |
 | `DOMAIN` / `EMAIL` | **Prod only** — your domain + an email for Let's Encrypt. |
+| `GHCR_OWNER` | GitHub owner/organization that publishes the images (default: `angeasla`). |
+| `BACKEND_IMAGE_TAG` / `FRONTEND_IMAGE_TAG` | **Prod only** — explicit published release tags, e.g. `v1.2.3`. |
 | `CORS_ALLOWED_ORIGINS` | Leave empty in prod (same-origin via nginx). Dev: `http://localhost:4200`. |
 | `APP_RAG_PROVIDER` | `meili` (default) or `chroma` — see §7. Optional. |
 
@@ -124,8 +129,9 @@ every 6 h.
 
 ### 4.5 Bring the stack up
 ```bash
-# prod
-docker compose -f docker-compose.prod.yml up -d --build
+# prod (pulls the explicit GHCR release tags from .env)
+docker compose -f docker-compose.prod.yml pull
+docker compose -f docker-compose.prod.yml up -d
 # dev
 docker compose up -d --build
 ```
