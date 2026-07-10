@@ -1,98 +1,73 @@
 package com.angeasla.ai_labor_rights_guide.service;
 
-import com.angeasla.ai_labor_rights_guide.dto.ChatRequestDto;
+import com.angeasla.ai_labor_rights_guide.calc.CalculatorTools;
 import com.angeasla.ai_labor_rights_guide.dto.ChatMessageDto;
-
+import com.angeasla.ai_labor_rights_guide.dto.ChatRequestDto;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.client.advisor.SimpleLoggerAdvisor;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
-import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
-import org.springframework.ai.document.Document;
-import org.springframework.ai.vectorstore.VectorStore;
+import org.springframework.ai.chat.metadata.Usage;
+import org.springframework.ai.chat.model.ChatResponse;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Collectors;
 
+/**
+ * Chat orchestration. The LLM grounds answers via tools (search_articles → get_article) and computes
+ * figures via the calculator tools — there is no pre-injected context. The system prompt is loaded from
+ * {@code resources/prompts/system-prompt.md} (not hardcoded).
+ *
+ * <p>Incoming messages pass through {@link ChatInputGuard} (per-message truncation + total-budget
+ * trimming) before the prompt is built, and every successful call's token usage is handed to
+ * {@link UsageCostService} for cost logging and the daily-spend alert. Provider errors (DeepSeek 5xx /
+ * timeouts) are intentionally left to propagate — outage fallback is handled by a controller advice.
+ */
 @Service
 public class AiChatService {
 
-    private final ChatClient chatClient;
-    private final VectorStore vectorStore;
+    private static final Logger log = LoggerFactory.getLogger(AiChatService.class);
 
-    public AiChatService(ChatClient.Builder chatClientBuilder, VectorStore vectorStore) {
-        this.vectorStore = vectorStore;
-        this.chatClient = chatClientBuilder.build();
+    private final ChatClient chatClient;
+    private final ChatInputGuard inputGuard;
+    private final UsageCostService usageCostService;
+
+    public AiChatService(ChatClient.Builder chatClientBuilder,
+                         CalculatorTools calculatorTools,
+                         SearchTools searchTools,
+                         ChatInputGuard inputGuard,
+                         UsageCostService usageCostService,
+                         @Value("classpath:prompts/system-prompt.md") Resource systemPrompt) throws IOException {
+        String prompt = systemPrompt.getContentAsString(StandardCharsets.UTF_8);
+        this.inputGuard = inputGuard;
+        this.usageCostService = usageCostService;
+        this.chatClient = chatClientBuilder
+                .defaultSystem(prompt)
+                .defaultTools(calculatorTools, searchTools)
+                .defaultAdvisors(new SimpleLoggerAdvisor())
+                .build();
     }
 
     public String generateResponse(ChatRequestDto request) {
         List<ChatMessageDto> messages = request.getMessages();
-
         if (messages == null || messages.isEmpty()) {
             return "Παρακαλώ γράψτε μια ερώτηση.";
         }
 
-        // 1. Βρίσκουμε το ΤΕΛΕΥΤΑΙΟ μήνυμα του χρήστη για να ψάξουμε στο ChromaDB
-        String latestUserMessage = messages.getLast().getContent();
+        // Prompt-stuffing defense: truncate over-long messages and trim history to the input budget
+        // before anything reaches the LLM.
+        messages = inputGuard.sanitize(messages);
 
-        // 2. Αναζήτηση στο ChromaDB
-        List<Document> similarDocuments = vectorStore.similaritySearch(latestUserMessage);
-
-        String context = similarDocuments.stream()
-                .map(Document::getText)
-                .collect(Collectors.joining("\n\n"));
-
-        // 3. Το δυναμικό System Prompt
-        String dynamicSystemPrompt = """
-            Είσαι ένας έμπειρος, ενσυναισθητικός και προσεκτικός σύμβουλος εργασιακών δικαιωμάτων στην Ελλάδα.
-            Ο ρόλος σου είναι να αναλύεις τα δεδομένα που σου δίνει ο εργαζόμενος και να παρέχεις εξατομικευμένες συμβουλές.
-           \s
-            ΒΑΣΙΚΟΣ ΚΑΝΟΝΑΣ ΕΛΛΗΝΙΚΟΥ ΩΡΑΡΙΟΥ (ΠΕΝΘΗΜΕΡΟ - 40 ΩΡΕΣ):
-            - Η 9η ώρα την ημέρα (41η έως 45η ώρα την εβδομάδα) είναι ΑΥΣΤΗΡΑ 'Υπερεργασία' και αμείβεται με προσαύξηση 20%.
-            - Από την 10η ώρα την ημέρα (46η ώρα την εβδομάδα και μετά) ξεκινά η 'Υπερωρία' (40% αν είναι νόμιμη, 120% αν είναι παράνομη/αδήλωτη).
-            - Δεν υπάρχει 'δωρεάν' 9η ώρα. Το λογιστήριο που ισχυρίζεται κάτι τέτοιο παρανομεί.
-           \s
-            ΑΥΣΤΗΡΟΙ ΚΑΝΟΝΕΣ ΣΥΜΠΕΡΙΦΟΡΑΣ & ΕΡΓΑΛΕΙΑ ΥΠΟΛΟΓΙΣΜΟΥ (SOFT TRIGGERS):
-            1. ΑΠΑΓΟΡΕΥΕΤΑΙ ΑΥΣΤΗΡΑ να χρησιμοποιείς εκφράσεις όπως 'βάσει του context', 'τα δεδομένα που έχω', 'το πλαίσιο που μου παρείχες', 'το αρχείο δεν περιέχει' ή οτιδήποτε παρόμοιο.\s
-            2. Μην απολογείσαι ποτέ στον χρήστη για το αν υπάρχουν ή λείπουν πληροφορίες από το σύστημα. Απάντα άμεσα και φυσικά σαν αληθινός άνθρωπος-εργατολόγος.
-            3. Έχεις στη διάθεσή σου ψηφιακά εργαλεία υπολογισμού (Tools). ΜΗΝ κάνεις πράξεις και πολύπλοκους μαθηματικούς υπολογισμούς μόνος σου (όπως ακριβή ποσά αποζημίωσης, δώρων, κλπ.).
-            4. ΑΝ ο χρήστης ρωτάει ευθέως "πόσα δικαιούμαι" ή αν κρίνεις ότι ένας υπολογισμός ολοκληρώνει ιδανικά τη συμβουλή σου, ΠΡΕΠΕΙ να προσθέσεις στο ΤΕΛΟΣ του μηνύματός σου το αντίστοιχο tag του εργαλείου, ακριβώς όπως φαίνεται παρακάτω.
-           \s
-                ΛΙΣΤΑ ΕΡΓΑΛΕΙΩΝ (Χρησιμοποίησε ΜΟΝΟ ΕΝΑ tag στο τέλος της απάντησης, π.χ. [TOOL: severance]):
-                - [TOOL: salary] (Υπολογισμός Καθαρού/Μικτού μισθού)
-                - [TOOL: leave-days] (Υπολογισμός Ημερών Αδείας)
-                - [TOOL: leave-part-time] (Ημέρες αδείας εκ περιτροπής)
-                - [TOOL: leave-pay] (Αποδοχές και Επίδομα Αδείας)
-                - [TOOL: severance] (Αποζημίωση Απόλυσης)
-                - [TOOL: overtime] (Υπερωρίες / Νυχτερινά / 6η μέρα)
-                - [TOOL: easter-bonus] (Δώρο Πάσχα)
-                - [TOOL: easter-part-time] (Δώρο Πάσχα εκ περιτροπής)
-                - [TOOL: easter-hourly] (Δώρο Πάσχα σε Ωρομίσθιους)
-                - [TOOL: xmas-bonus] (Δώρο Χριστουγέννων)
-                - [TOOL: xmas-part-time] (Δώρο Χριστουγέννων εκ περιτροπής)
-                - [TOOL: xmas-hourly] (Δώρο Χριστουγέννων σε Ωρομίσθιους)
-                - [TOOL: maternity] (Μητρότητα)
-                - [TOOL: national-pension] (Εθνική Σύνταξη)
-                - [TOOL: contributory-pension] (Ανταποδοτική Σύνταξη)
-           \s
-            ΠΛΗΡΟΦΟΡΙΕΣ ΕΡΓΑΣΙΑΚΟΥ ΟΔΗΓΟΥ:
-            ---------------------
-            {CONTEXT_PLACEHOLDER}
-            ---------------------
-            ΟΔΗΓΙΑ: Απάντησε στην ερώτηση συνδυάζοντας τις παραπάνω πληροφορίες. Αν είναι άσχετες, αγνόησέ τες σιωπηλά.
-           \s""".replace("{CONTEXT_PLACEHOLDER}", context);
-
-        // 4. Χτίσιμο του ιστορικού συζήτησης για το Spring AI
         List<Message> springMessages = new ArrayList<>();
-
-        // Βάζουμε πρώτο το System Prompt
-        springMessages.add(new SystemMessage(dynamicSystemPrompt));
-
-        // Προσθέτουμε όλο το ιστορικό από την Angular
         for (ChatMessageDto msg : messages) {
-            // Αν το dto έχει getRole() επιστρέφει "user" ή κάτι άλλο
             if ("user".equalsIgnoreCase(msg.getRole())) {
                 springMessages.add(new UserMessage(msg.getContent()));
             } else {
@@ -100,10 +75,38 @@ public class AiChatService {
             }
         }
 
-        // 5. Κλήση στο DeepSeek στέλνοντας ολόκληρο το πακέτο μηνυμάτων
-        return this.chatClient.prompt()
+        ChatResponse response = this.chatClient.prompt()
                 .messages(springMessages)
                 .call()
-                .content();
+                .chatResponse();
+
+        recordUsage(response);
+
+        if (response == null || response.getResult() == null || response.getResult().getOutput() == null) {
+            log.warn("Chat response had no result/output (e.g. token budget exhausted mid-tool-chain)");
+            return "Συγγνώμη, δεν μπόρεσα να ολοκληρώσω την απάντηση. Δοκίμασε ξανά.";
+        }
+        return response.getResult().getOutput().getText();
+    }
+
+    /**
+     * Hands token usage to {@link UsageCostService} for cost logging. Usage metadata is best-effort:
+     * if the provider omits it (null metadata/usage) we skip cost accounting with a single DEBUG note
+     * rather than failing the response.
+     */
+    private void recordUsage(ChatResponse response) {
+        Usage usage = response == null || response.getMetadata() == null
+                ? null
+                : response.getMetadata().getUsage();
+        if (usage == null) {
+            log.debug("CHAT_COST skipped — no usage metadata on the chat response");
+            return;
+        }
+        usageCostService.record(tokenCount(usage.getPromptTokens()), tokenCount(usage.getCompletionTokens()));
+    }
+
+    /** Spring AI Usage token getters are {@code Integer} and may be null — treat absent as zero. */
+    private static int tokenCount(Integer value) {
+        return value == null ? 0 : value;
     }
 }

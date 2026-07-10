@@ -1,17 +1,85 @@
-version: '3.9'
+name: ai-labor-rights
+
+# Local/dev stack: ports exposed directly, no TLS. For deployment use docker-compose.prod.yml.
+# Quickstart:
+#   cp .env.example .env          # set DEEPSEEK_API_KEY and MEILI_MASTER_KEY
+#   docker compose up -d --build
+#   curl -X POST localhost:8080/api/admin/ingest          # index the guide into Meilisearch
+#   curl 'localhost:8080/api/search?q=%CF%85%CF%80%CE%B5%CF%81%CF%89%CF%81%CE%AF%CE%B5%CF%82'
+#
+# The `frontend` service builds from the sibling Angular repo (../Angular-frontend).
+# Comment it out if that checkout isn't present.
 
 services:
+  meilisearch:
+    image: getmeili/meilisearch:v1.12
+    ports:
+      - "7700:7700"
+    environment:
+      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY}
+      MEILI_NO_ANALYTICS: "true"
+    volumes:
+      - meili_data:/meili_data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7700/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ChromaDB — alternative chat-RAG backend (selected at runtime via APP_RAG_PROVIDER=chroma).
+  # Always run during the trial so ingestion can populate it and you can flip the env var live.
   chromadb:
-    image: chromadb/chroma:latest
-    container_name: chromadb
+    image: chromadb/chroma:0.6.3
     ports:
       - "8000:8000"
     volumes:
-      - chroma-data:/chroma/chroma
+      - chroma_data:/chroma/chroma
     environment:
-      - IS_PERSISTENT=TRUE
-      - ALLOW_RESET=TRUE
+      IS_PERSISTENT: "TRUE"
+      ALLOW_RESET: "TRUE"
+    restart: unless-stopped
+    # Informational only (backend waits for start, not health — see depends_on). The heartbeat path
+    # is v2 on Chroma 0.5+/0.6; adjust if you pin a different image.
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v2/heartbeat')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      MEILISEARCH_URL: http://meilisearch:7700
+      MEILISEARCH_KEY: ${MEILI_MASTER_KEY}
+      CORS_ALLOWED_ORIGINS: http://localhost:4200
+      # Chat RAG backend: meili (default) | chroma. The /api/search box stays on Meili regardless.
+      APP_RAG_PROVIDER: ${APP_RAG_PROVIDER:-meili}
+      CHROMA_HOST: http://chromadb
+      CHROMA_PORT: "8000"
+    volumes:
+      # Local ONNX embedding model (read-only). If ./models is empty the app downloads it at startup.
+      - ./models:/app/models:ro
+    depends_on:
+      meilisearch:
+        condition: service_healthy
+      chromadb:
+        condition: service_started
+    restart: unless-stopped
+    mem_limit: 2560m   # cap heap+native (JVM MaxRAMPercentage resolves against this); matches prod
+
+  frontend:
+    build:
+      context: ../Angular-frontend
+    ports:
+      - "4200:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
 
 volumes:
-  chroma-data:
-    driver: local
+  meili_data:
+  chroma_data:
