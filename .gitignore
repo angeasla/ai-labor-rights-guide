@@ -8,6 +8,16 @@ target/
 # Fetch with scripts/fetch-embedding-model.* ; tokenizer.json is bundled in the dependency jar.
 /models/
 
+# Local deployment secrets and Let's Encrypt state. Keep .env.example tracked as the template.
+.env
+.env.*
+!.env.example
+/certbot/
+*.pem
+*.key
+*.p12
+*.pfx
+
 ### STS ###
 .apt_generated
 .classpath
