@@ -2,7 +2,6 @@ package com.angeasla.ai_labor_rights_guide.calc;
 
 import org.junit.jupiter.api.Test;
 
-import static com.angeasla.ai_labor_rights_guide.calc.SeveranceCalculator.RetirementRegime.*;
 import static com.angeasla.ai_labor_rights_guide.calc.WageCalculators.OvertimeType.*;
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -149,86 +148,73 @@ class CalculatorTest {
 
     @Test
     void unemployment_vectors() {
-        var v1 = UnemploymentCalculator.unemployment(830, 200);
-        assertEquals(33.20, v1.avgDailyWage(), EPS);
-        assertEquals(18.26, v1.dailyBenefit(), EPS);
-        assertEquals(456.50, v1.uncappedMonthly(), EPS);
-        assertEquals("SALARY", v1.boundApplied());
-        assertEquals(4, v1.durationMonths());
-        assertEquals(456.50, v1.monthlyBenefit(), EPS);
-        assertEquals(1826.00, v1.totalPayout(), EPS);
+        // Full tier (avg gross monthly ≥ €493,09): €22,60/day → €565,00/mo, min-wage-pegged
+        var v1 = UnemploymentCalculator.unemployment(920, 200);
         assertTrue(v1.eligible());
+        assertEquals(100, v1.tierPercent());
+        assertEquals(22.60, v1.dailyBenefit(), EPS);
+        assertEquals(565.00, v1.monthlyBenefit(), EPS);
+        assertEquals(8, v1.durationMonths());          // 180–219 days
+        assertEquals(4520.00, v1.totalPayout(), EPS);
 
-        var v2 = UnemploymentCalculator.unemployment(500, 300);
-        assertEquals(275.00, v2.uncappedMonthly(), EPS);
-        assertEquals("FLOOR", v2.boundApplied());
-        assertEquals(416.00, v2.monthlyBenefit(), EPS);
-        assertEquals(8, v2.durationMonths());
-        assertEquals(3328.00, v2.totalPayout(), EPS);
+        // +10% per dependent (2 dependents → ×1.20)
+        var v1d = UnemploymentCalculator.unemployment(920, 200, 2);
+        assertEquals(678.00, v1d.monthlyBenefit(), EPS);
+        assertEquals(2, v1d.dependents());
 
-        var v3 = UnemploymentCalculator.unemployment(2000, 600);
-        assertEquals(1100.00, v3.uncappedMonthly(), EPS);
-        assertEquals("CAP", v3.boundApplied());
-        assertEquals(509.00, v3.monthlyBenefit(), EPS);
-        assertEquals(12, v3.durationMonths());
-        assertEquals(6108.00, v3.totalPayout(), EPS);
+        // 75% tier (€246,55–493,08)
+        var v2 = UnemploymentCalculator.unemployment(400, 300);
+        assertEquals(75, v2.tierPercent());
+        assertEquals(423.75, v2.monthlyBenefit(), EPS);
+        assertEquals(12, v2.durationMonths());         // 250+ days
+        assertEquals(5085.00, v2.totalPayout(), EPS);
 
-        var v4 = UnemploymentCalculator.unemployment(830, 100);
+        // 50% tier (≤ €246,54)
+        var v3 = UnemploymentCalculator.unemployment(200, 130);
+        assertEquals(50, v3.tierPercent());
+        assertEquals(282.50, v3.monthlyBenefit(), EPS);
+        assertEquals(5, v3.durationMonths());          // 125–149 days
+
+        // Below 125 insured days → ineligible
+        var v4 = UnemploymentCalculator.unemployment(920, 100);
         assertFalse(v4.eligible());
         assertEquals(0.00, v4.monthlyBenefit(), EPS);
         assertEquals(0, v4.durationMonths());
 
+        // Duration ladder (5-bracket, 14-month basis)
         assertEquals(0, UnemploymentCalculator.durationMonths(124));
-        assertEquals(2, UnemploymentCalculator.durationMonths(125));
-        assertEquals(2, UnemploymentCalculator.durationMonths(149));
-        assertEquals(3, UnemploymentCalculator.durationMonths(150));
-        assertEquals(6, UnemploymentCalculator.durationMonths(299));
-        assertEquals(8, UnemploymentCalculator.durationMonths(300));
-        assertEquals(10, UnemploymentCalculator.durationMonths(599));
+        assertEquals(5, UnemploymentCalculator.durationMonths(125));
+        assertEquals(5, UnemploymentCalculator.durationMonths(149));
+        assertEquals(6, UnemploymentCalculator.durationMonths(150));
+        assertEquals(8, UnemploymentCalculator.durationMonths(180));
+        assertEquals(10, UnemploymentCalculator.durationMonths(220));
+        assertEquals(12, UnemploymentCalculator.durationMonths(250));
         assertEquals(12, UnemploymentCalculator.durationMonths(600));
 
         assertThrows(IllegalArgumentException.class, () -> UnemploymentCalculator.unemployment(0, 200));
     }
 
-    // ---- Voluntary-retirement severance ----
+    // ---- Voluntary-retirement severance (Ν.3198/1955 art.8 §2: 40% supp-insured / 50% not, of full dismissal severance) ----
 
     @Test
     void retirementSeverance_vectors() {
-        var n60 = SeveranceCalculator.retirementSeverance(830, 60, NEW);
-        assertEquals(3, n60.multiplierMonths());
-        assertEquals(0.5, n60.retirementFactor(), EPS);
-        assertEquals(1245.00, n60.amount(), EPS);
+        // 50% (no supplementary insurance) of the full no-notice dismissal severance
+        var a = SeveranceCalculator.retirementSeverance(1000, 3, false);
+        assertEquals(0.50, a.factor(), EPS);
+        assertEquals(2, a.compensationMonths());
+        assertEquals(2333.33, a.dismissalSeveranceBase(), EPS);
+        assertEquals(1166.67, a.amount(), EPS);
 
-        var n240 = SeveranceCalculator.retirementSeverance(830, 240, NEW);
-        assertEquals(6, n240.multiplierMonths());
-        assertEquals(1.0, n240.retirementFactor(), EPS);
-        assertEquals(4980.00, n240.amount(), EPS);
+        // 40% (supplementary-insured & eligible) of the same base
+        var b = SeveranceCalculator.retirementSeverance(1000, 3, true);
+        assertEquals(0.40, b.factor(), EPS);
+        assertEquals(933.33, b.amount(), EPS);
 
-        var o240 = SeveranceCalculator.retirementSeverance(830, 240, OLD);
-        assertEquals(12, o240.multiplierMonths());
-        assertEquals(1.0, o240.retirementFactor(), EPS);
-        assertEquals(9960.00, o240.amount(), EPS);
-
-        var o200 = SeveranceCalculator.retirementSeverance(830, 200, OLD);
-        assertEquals(9, o200.multiplierMonths());
-        assertEquals(0.5, o200.retirementFactor(), EPS);
-        assertEquals(3735.00, o200.amount(), EPS);
-
-        var o204 = SeveranceCalculator.retirementSeverance(830, 204, OLD);
-        assertEquals(9, o204.multiplierMonths());
-        assertEquals(1.0, o204.retirementFactor(), EPS);
-        assertEquals(7470.00, o204.amount(), EPS);
-
-        assertEquals(0, SeveranceCalculator.retirementSeverance(830, 6, NEW).multiplierMonths());
-        assertEquals(0.00, SeveranceCalculator.retirementSeverance(830, 6, NEW).amount(), EPS);
-        assertEquals(0, SeveranceCalculator.retirementSeverance(830, 6, OLD).multiplierMonths());
-        assertEquals(0.00, SeveranceCalculator.retirementSeverance(830, 6, OLD).amount(), EPS);
+        assertEquals(5250.00, SeveranceCalculator.retirementSeverance(1500, 10, false).amount(), EPS);  // 6 × 1750 × 50%
+        assertEquals(11200.00, SeveranceCalculator.retirementSeverance(2000, 16, true).amount(), EPS);  // 12-mo cap × 2333.33 × 40%
+        assertEquals(0.00, SeveranceCalculator.retirementSeverance(830, 0, false).amount(), EPS);
 
         assertThrows(IllegalArgumentException.class,
-                () -> SeveranceCalculator.retirementSeverance(0, 60, NEW));
-
-        // Regime auto-select by hire date relative to the 2010-06-17 cutoff (today-independent).
-        assertEquals(OLD, SeveranceCalculator.retirementSeverance(830, java.time.LocalDate.of(2010, 6, 17), null).regime());
-        assertEquals(NEW, SeveranceCalculator.retirementSeverance(830, java.time.LocalDate.of(2010, 6, 18), null).regime());
+                () -> SeveranceCalculator.retirementSeverance(0, 10, false));
     }
 }

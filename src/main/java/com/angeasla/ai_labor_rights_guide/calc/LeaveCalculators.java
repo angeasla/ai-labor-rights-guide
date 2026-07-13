@@ -96,12 +96,13 @@ public final class LeaveCalculators {
     // ---- Maternity reduced-hours equivalent (ισόχρονη άδεια) ----
 
     /**
-     * Continuous-leave equivalent of the 30-month one-hour daily reduction (Ν.1483/1984, Ν.4808/2021).
-     * Result is an estimate and an employer-agreement option, not an automatic right (see CALCULATOR_SPECS.md).
+     * Continuous-leave equivalent of the 30-month one-hour daily reduction (Ν.4808/2021 art.37, base Ν.1483/1984).
+     * The 30-month childcare/breastfeeding period is uniform — multiple births (twins/triplets) do NOT extend it
+     * (art.37 fixes no per-child extension). Result is an estimate and an employer-agreement option, not an
+     * automatic right (see CALCULATOR_SPECS.md).
      */
-    public static MaternityResult maternity(LocalDate windowStart, int workWeek, int annualLeaveDays,
-                                            int multipleBirthExtraChildren) {
-        int windowMonths = 30 + 6 * Math.max(0, multipleBirthExtraChildren);
+    public static MaternityResult maternity(LocalDate windowStart, int workWeek, int annualLeaveDays) {
+        int windowMonths = 30;
         LocalDate windowEnd = windowStart.plusMonths(windowMonths);
 
         int workingDays = 0;

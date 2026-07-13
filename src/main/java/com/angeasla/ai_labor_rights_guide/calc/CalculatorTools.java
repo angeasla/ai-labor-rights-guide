@@ -88,7 +88,7 @@ public class CalculatorTools {
         return WageCalculators.nightWork(monthlySalary, hourlyWage, hours, sundayOrHoliday, sixDay);
     }
 
-    @Tool(description = "Υπολογίζει το Δώρο Πάσχα για μισθωτό (ΑΝ 435/1968). Χρησιμοποίησε ΠΑΝΤΑ αυτό το εργαλείο — μην υπολογίζεις εσύ.")
+    @Tool(description = "Υπολογίζει το Δώρο Πάσχα για μισθωτό (Ν.1082/1980, ΚΥΑ 19040/1981). Χρησιμοποίησε ΠΑΝΤΑ αυτό το εργαλείο — μην υπολογίζεις εσύ.")
     public BonusCalculators.BonusResult easterBonus(
             @ToolParam(description = "Μηνιαίος μισθός σε ευρώ") double monthlySalary,
             @ToolParam(description = "Ημερολογιακές ημέρες εργασίας στην περίοδο 1/1–30/4 (μέγιστο 120· 121 σε δίσεκτο έτος)") int workedDays) {
@@ -110,7 +110,7 @@ public class CalculatorTools {
         return BonusCalculators.easterHourly(totalEarnings, actualDaysWorked, calendarDays);
     }
 
-    @Tool(description = "Υπολογίζει το Δώρο Χριστουγέννων για μισθωτό (ΑΝ 682/1945). Χρησιμοποίησε ΠΑΝΤΑ αυτό το εργαλείο — μην υπολογίζεις εσύ.")
+    @Tool(description = "Υπολογίζει το Δώρο Χριστουγέννων για μισθωτό (Ν.1082/1980, ΚΥΑ 19040/1981). Χρησιμοποίησε ΠΑΝΤΑ αυτό το εργαλείο — μην υπολογίζεις εσύ.")
     public BonusCalculators.BonusResult christmasBonus(
             @ToolParam(description = "Μηνιαίος μισθός σε ευρώ") double monthlySalary,
             @ToolParam(description = "Ημερολογιακές ημέρες εργασίας στην περίοδο 1/5–31/12 (πλήρης περίοδος ≥245)") int workedDays) {
@@ -136,9 +136,8 @@ public class CalculatorTools {
     public LeaveCalculators.MaternityResult maternity(
             @ToolParam(description = "Ημερομηνία έναρξης (λήξη επιδόματος μητρότητας), μορφή YYYY-MM-DD") LocalDate windowStart,
             @ToolParam(description = "Ημέρες εργασίας ανά εβδομάδα: 5 ή 6") int workWeek,
-            @ToolParam(description = "Ημέρες ετήσιας άδειας της εργαζομένης") int annualLeaveDays,
-            @ToolParam(description = "Επιπλέον τέκνα από πολύδυμη κύηση (0 για ένα τέκνο)") int multipleBirthExtraChildren) {
-        return LeaveCalculators.maternity(windowStart, workWeek, annualLeaveDays, multipleBirthExtraChildren);
+            @ToolParam(description = "Ημέρες ετήσιας άδειας της εργαζομένης") int annualLeaveDays) {
+        return LeaveCalculators.maternity(windowStart, workWeek, annualLeaveDays);
     }
 
     @Tool(description = "Εκτιμά την εθνική σύνταξη (Ν.4387/2016). Χρησιμοποίησε ΠΑΝΤΑ αυτό το εργαλείο για ερωτήσεις περί εθνικής σύνταξης — μην υπολογίζεις εσύ.")
@@ -156,18 +155,19 @@ public class CalculatorTools {
         return PensionCalculators.contributoryPension(pensionableEarnings, insuranceYears);
     }
 
-    @Tool(description = "Υπολογίζει το επίδομα ανεργίας και τη διάρκεια επιδότησης (ΔΥΠΑ, Ν.1545/1985). Χρησιμοποίησε ΠΑΝΤΑ αυτό το εργαλείο για ερωτήσεις περί επιδόματος ανεργίας — μην υπολογίζεις εσύ.")
+    @Tool(description = "Υπολογίζει το τακτικό επίδομα ανεργίας και τη διάρκεια επιδότησης (ΔΥΠΑ). Το ημερήσιο επίδομα είναι κλιμακωτό ποσό συνδεδεμένο με τον κατώτατο μισθό (ΟΧΙ 55% του δικού σου μισθού), +10% ανά προστατευόμενο μέλος. Χρησιμοποίησε ΠΑΝΤΑ αυτό το εργαλείο — μην υπολογίζεις εσύ.")
     public UnemploymentCalculator.UnemploymentResult unemployment(
-            @ToolParam(description = "Μέσος μηνιαίος μισθός σε ευρώ") double avgMonthlySalary,
-            @ToolParam(description = "Ημέρες ασφάλισης στο τελευταίο 14μηνο, ελάχιστο 125") int insuredDays) {
-        return UnemploymentCalculator.unemployment(avgMonthlySalary, insuredDays);
+            @ToolParam(description = "Μέσος μεικτός μηνιαίος μισθός των τελευταίων 6 μηνών σε ευρώ") double avgMonthlySalary,
+            @ToolParam(description = "Ημέρες ασφάλισης στο τελευταίο 14μηνο, ελάχιστο 125") int insuredDays,
+            @ToolParam(description = "Αριθμός προστατευόμενων μελών (0 αν δεν υπάρχουν) — προσαύξηση 10% ανά μέλος") int dependents) {
+        return UnemploymentCalculator.unemployment(avgMonthlySalary, insuredDays, dependents);
     }
 
-    @Tool(description = "Υπολογίζει την αποζημίωση οικειοθελούς αποχώρησης λόγω συνταξιοδότησης (Ν.2112/1920, Ν.3863/2010, Ν.4093/2012 αρ.74). ΔΙΑΦΕΡΕΙ από την αποζημίωση απόλυσης. Χρησιμοποίησε ΠΑΝΤΑ αυτό το εργαλείο — μην υπολογίζεις εσύ.")
+    @Tool(description = "Υπολογίζει την αποζημίωση οικειοθελούς αποχώρησης λόγω συνταξιοδότησης (Ν.3198/1955 άρθρο 8): 40% (αν ο εργαζόμενος έχει επικουρική ασφάλιση και δικαίωμα επικουρικής σύνταξης) ή 50% (χωρίς επικουρική) της πλήρους αποζημίωσης απόλυσης. ΔΙΑΦΕΡΕΙ από την αποζημίωση απόλυσης. Χρησιμοποίησε ΠΑΝΤΑ αυτό το εργαλείο — μην υπολογίζεις εσύ.")
     public SeveranceCalculator.RetirementSeveranceResult retirementSeverance(
             @ToolParam(description = "Μηνιαίος μισθός σε ευρώ") double monthlySalary,
-            @ToolParam(description = "Ημερομηνία πρόσληψης, μορφή YYYY-MM-DD") LocalDate hireDate,
-            @ToolParam(description = "OLD ή NEW· κενό για αυτόματη επιλογή βάσει ημερομηνίας") SeveranceCalculator.RetirementRegime regime) {
-        return SeveranceCalculator.retirementSeverance(monthlySalary, hireDate, regime);
+            @ToolParam(description = "Συμπληρωμένα έτη υπηρεσίας στον εργοδότη") int completedYears,
+            @ToolParam(description = "true αν ο εργαζόμενος έχει επικουρική ασφάλιση και δικαίωμα επικουρικής σύνταξης (→40%)· false αν δεν έχει επικουρική (→50%)") boolean supplementaryInsured) {
+        return SeveranceCalculator.retirementSeverance(monthlySalary, completedYears, supplementaryInsured);
     }
 }

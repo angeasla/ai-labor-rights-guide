@@ -6,6 +6,8 @@ Verified Greek labor-law spec for the 16 calculators ported into this backend. T
 
 Verification date: 2026-06-08. Constants reflect law in force for 2026. **Centralize all constants in `CalcConstants` so yearly updates are one-file changes.**
 
+> **Updated 2026-07-13** — reconciled with the corpus legal-accuracy audit: corrected the EFKA employer rate (§1), the holiday-bonus citations (§7) and the maternity window (§8); **rewrote Unemployment (§12)** to the min-wage-pegged tiered schedule and the 5-bracket duration ladder; **rewrote voluntary-retirement severance (§13)** to the Ν.3198/1955 art.8 §2 40%/50% rule (the old hire-date "OLD/NEW regime" + 17-year model was spurious). All 21 calc unit tests pass on JDK 25.
+
 Rounding convention (all calculators): keep full precision internally; round **only final monetary outputs** to 2 decimals `HALF_UP`. Day counts round half-up to whole days.
 
 ---
@@ -20,7 +22,7 @@ Rounding convention (all calculators): keep full precision internally; round **o
 ## 1. Gross ↔ Net salary  (Ν.4172/2013, 2026 reform Ν.5246/2025)
 
 Constants (2026):
-- EFKA employee **0.1337**, employer **0.2229** (employer informational; ±~0.5% sector variance).
+- EFKA employee **0.1337**, employer **0.2179** (2026, post Ν.5162/2024 health-branch cut; employer informational — used only for employer-cost display; ±~0.5% sector variance).
 - EFKA monthly ceiling **€7,761.94** → employee EFKA = `min(gross, 7761.94) × 0.1337`.
 - Brackets (annual): **9% / 20% / 26% / 34% / 39% / 44%** at 10k / 20k / 30k / 40k / 60k / ∞. *(Both candidates used the stale 2025 9/22/28/36/44 — corrected.)*
 - Credit base by children: 0→**777**, 1→900, 2→1120, 3→1340, 4→1580, 5→1780, >5→1780+220·(n−5).
@@ -128,7 +130,7 @@ DAILY_WAGE: `leavePay = paidDays*amount`, `bonusCap = amount*13`.
 
 ---
 
-## 7. Holiday bonuses (δώρα)  (Christmas ΑΝ 682/1945; Easter ΑΝ 435/1968; ΚΥΑ 19040/1981)
+## 7. Holiday bonuses (δώρα)  (Christmas &amp; Easter: Ν.1082/1980 + ΚΥΑ 19040/1981· penal sanctions ΑΝ 690/1945)
 
 **Increment (all variants): `× (1 + 1/24)`** (επίδομα αδείας, legally mandatory). Use `1.0/24.0` exactly — not the truncated `0.04166`.
 Period boundaries (legal reference): Easter **1 Jan–30 Apr** (full denom 120 days); Christmas **1 May–31 Dec** (full denom 237.5). Day counts inclusive `(end-start)+1`, ratio capped at 1. Daily wage from monthly = `/25`.
@@ -156,7 +158,7 @@ Vectors (factor 25/24 ≈ 1.041667):
 
 ## 8. Maternity reduced-hours equivalent (ισόχρονη άδεια)  (Ν.1483/1984, Ν.4808/2021)
 
-Window 30 months (+6 per extra child of a multiple birth). `workingDays = calendarDays − weekends − statutoryHolidays(not on weekends) − round(annualLeaveDays × windowMonths/12)`. `hoursOwed = workingDays × 1`. `continuousDays = round(hoursOwed / (week==6 ? 40/6 : 8))`. Result ≈ 3.5 months (5-day) — **an estimate**, and an **employer-agreement option**, not an automatic right.
+Window **30 months, uniform** — multiple births (twins/triplets) do NOT extend it (Ν.4808/2021 art.37 fixes no per-child extension; the earlier `+6 per extra child` was removed). `workingDays = calendarDays − weekends − statutoryHolidays(not on weekends) − round(annualLeaveDays × windowMonths/12)`. `hoursOwed = workingDays × 1`. `continuousDays = round(hoursOwed / (week==6 ? 40/6 : 8))`. Result ≈ 3.5 months (5-day) — **an estimate**, and an **employer-agreement option**, not an automatic right.
 Statutory holidays: fixed 1/1, 6/1, 25/3, 1/5, 15/8, 28/10, 25/12, 26/12; movable vs Orthodox Easter — Clean Monday −48, Good Friday −2, Easter Monday +1, Holy Spirit +50. Orthodox Easter via correct computus (`EasterDate`, Gregorian-converted, `LocalDate`).
 *(Flag: ±day-count varies by source ~73–109 days; KEPEA/official calculator should calibrate.)*
 
@@ -208,12 +210,57 @@ Per-year accrual %: 0–15 **0.77**, 15–18 0.84, 18–21 0.90, 21–24 0.96, 2
 
 ---
 
+## 12. Unemployment benefit (ΔΥΠΑ)  (Ν.1545/1985 + current ΔΥΠΑ schedule, from 1.4.2026)
+
+**Amount — flat, minimum-wage-pegged (NOT 55% of the claimant's own wage).** Daily = 55% of the statutory
+minimum daily wage; tiered by average gross monthly earnings (last 6 months); `monthly = daily × 25 × (1 + 0.10 × dependents)`.
+- avg ≥ **€493.09** → **€22.60/day → €565.00/mo** (100%)
+- €246.55–493.08 → €16.95/day → €423.75/mo (75%)
+- ≤ €246.54 → €11.30/day → €282.50/mo (50%)
+
+*(Replaced the earlier "55% of own daily wage, floor €416 / cap €509 (2024)" model — wrong shape. `unemployment()`
+has a 2-arg overload (no dependents) + a 3-arg overload with dependents. The separate contributory-benefit pilot,
+up to ~€1,438, is NOT modelled.)*
+
+**Duration** by insured days on the 14-month basis (min 5 months): **125–149→5, 150–179→6, 180–219→8, 220–249→10, 250+→12**.
+*(Corrected from the old 8-bracket "125–149→2 …" ladder.)* The 4-yr/400-day window is a separate cumulative cap.
+**Not modelled:** the age-≥49 exception (210 days → 12 months) — needs claimant age.
+
+| avg monthly | insuredDays | deps | monthly / duration |
+|---|---|---|---|
+| 920 | 200 | 0 | 565.00 / 8 |
+| 920 | 200 | 2 | 678.00 / 8 |
+| 400 | 300 | 0 | 423.75 / 12 |
+| 200 | 130 | 0 | 282.50 / 5 |
+| 920 | 100 | 0 | 0 / 0 (ineligible &lt;125) |
+
+---
+
+## 13. Voluntary-retirement severance (αποζημίωση λόγω συνταξιοδότησης)  (Ν.3198/1955 art.8 §2)
+
+A worker who leaves having met the conditions for a FULL old-age pension gets a percentage of the **full
+no-notice dismissal severance** (the §9 completed-years ladder × 14/12): **40%** if covered by supplementary
+(επικουρική) insurance and eligible for the supplementary pension, otherwise **50%**. Applies to υπάλληλοι &amp;
+εργατοτεχνίτες alike (Ν.4808/2021 art.64, from 1.1.2022); 6-month αποσβεστική προθεσμία to claim.
+
+*(**SPURIOUS — removed:** the "OLD/NEW regime by hire date 17.6.2010", the "17-year full/half factor", and any
+"6-month cap" (that "6 months" is the *filing deadline*, not a ceiling). None has a legal basis for retirement severance.)*
+
+| gross | years | supplementary | base (full dismissal) → amount |
+|---|---|---|---|
+| 1000 | 3 | no  | 2333.33 → **1166.67** (50%) |
+| 1000 | 3 | yes | 2333.33 → **933.33** (40%) |
+| 1500 | 10 | no | 10500.00 → 5250.00 |
+| 2000 | 16 | yes | 28000.00 → 11200.00 |
+
+---
+
 ## Flagged uncertainties (resolve during KEPEA pass)
-1. Gross-to-net: disability +€200 for 2026; youth (age<30) brackets; employer rate 22.29 vs 21.79.
+1. Gross-to-net: disability +€200 for 2026; youth (age<30) brackets. *(Employer rate **RESOLVED → 0.2179**, 2026 post-Ν.5162/2024 cut.)*
 2. Part-time leave: canonical input model (ratio vs days-worked).
 3. Maternity: exact day-count (no single statutory value).
 4. National pension: per-tier rounding (402.17 vs EFKA 402.18) — use ±0.01 tolerance or hardcode EFKA table.
-5. The guide articles `orario/yperoreis.md` and `orario/nyxterina.md` are **stale** (cite Ν.3385/2005, miss υπερεργασία +20% and +120% illegal) — recommend updating them to match these corrected calculators.
+5. **RESOLVED (2026-07-13):** the guide articles (`orario/yperoreis.md`, `orario/nyxterina.md`, and the corpus at large) were updated in the legal-accuracy audit to match these calculators — υπερεργασία +20%, +120% illegal overtime, night +25%, and the ΚΕΔ (ΠΔ 62/2025)/Ν.5239/2025 framing.
 
 ## Sources
 Labour Inspectorate (hli.gov.gr), KEPEA/GSEE (kepea.gr), Ministry of Labour (ypergasias.gov.gr), Taxheaven (2026 brackets, art.16), e-ΕΦΚΑ (pensions), Ν.4670/2020 (opengov). Full URLs in the verification research transcript.
