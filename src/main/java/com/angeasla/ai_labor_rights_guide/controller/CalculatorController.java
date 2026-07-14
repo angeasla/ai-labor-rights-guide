@@ -92,7 +92,7 @@ public class CalculatorController {
 
     @PostMapping("/maternity")
     public LeaveCalculators.MaternityResult maternity(@RequestBody MaternityRequest r) {
-        return LeaveCalculators.maternity(r.windowStart(), r.workWeek(), r.annualLeaveDays(), r.multipleBirthExtraChildren());
+        return LeaveCalculators.maternity(r.windowStart(), r.workWeek(), r.annualLeaveDays());
     }
 
     @PostMapping("/national-pension")
@@ -107,12 +107,12 @@ public class CalculatorController {
 
     @PostMapping("/unemployment")
     public UnemploymentCalculator.UnemploymentResult unemployment(@RequestBody UnemploymentRequest r) {
-        return UnemploymentCalculator.unemployment(r.avgMonthlySalary(), r.insuredDays());
+        return UnemploymentCalculator.unemployment(r.avgMonthlySalary(), r.insuredDays(), r.dependents());
     }
 
     @PostMapping("/retirement-severance")
     public SeveranceCalculator.RetirementSeveranceResult retirementSeverance(@RequestBody RetirementSeveranceRequest r) {
-        return SeveranceCalculator.retirementSeverance(r.monthlySalary(), r.hireDate(), r.regime());
+        return SeveranceCalculator.retirementSeverance(r.monthlySalary(), r.completedYears(), r.supplementaryInsured());
     }
 
     // ---- request bodies ----
@@ -159,8 +159,7 @@ public class CalculatorController {
     public record HourlyBonusRequest(double totalEarnings, int actualDaysWorked, int calendarDays) {
     }
 
-    public record MaternityRequest(LocalDate windowStart, int workWeek, int annualLeaveDays,
-                                   int multipleBirthExtraChildren) {
+    public record MaternityRequest(LocalDate windowStart, int workWeek, int annualLeaveDays) {
     }
 
     public record NationalPensionRequest(int insuranceYears, int residenceYears, int retirementAge) {
@@ -169,10 +168,10 @@ public class CalculatorController {
     public record ContributoryPensionRequest(double pensionableEarnings, int insuranceYears) {
     }
 
-    public record UnemploymentRequest(double avgMonthlySalary, int insuredDays) {
+    public record UnemploymentRequest(double avgMonthlySalary, int insuredDays, int dependents) {
     }
 
-    public record RetirementSeveranceRequest(double monthlySalary, LocalDate hireDate,
-                                             SeveranceCalculator.RetirementRegime regime) {
+    public record RetirementSeveranceRequest(double monthlySalary, int completedYears,
+                                             boolean supplementaryInsured) {
     }
 }

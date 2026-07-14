@@ -53,76 +53,37 @@ public final class SeveranceCalculator {
         return 4;
     }
 
-    // ---- Voluntary-retirement severance (Ν.2112/1920, Ν.3863/2010, Ν.4093/2012 αρ.74) ----
-    // DISTINCT from dismissal severance above: uses the PLAIN monthly salary (no 14/12 δώρα uplift),
-    // two regime ladders (OLD/NEW by hire date), and a 17-year full-factor rule.
+    // ---- Voluntary-retirement severance (Ν.3198/1955 art.8 §2) ----
+    // A worker who leaves (υπάλληλος: leaves or is let go) having met the conditions for a FULL old-age
+    // pension gets a REDUCED share of the FULL no-notice dismissal severance: 40% if covered by
+    // supplementary (επικουρική) insurance and eligible for the supplementary pension, otherwise 50%.
+    // Same completed-years ladder and 14/12 δώρα uplift as dismissal severance. There is NO hire-date
+    // "OLD/NEW regime" and NO 17-year full/half rule (both were unsupported). Applies to υπάλληλοι and
+    // εργατοτεχνίτες alike since 1.1.2022 (Ν.4808/2021 art.64).
 
-    public enum RetirementRegime {OLD, NEW}
-
-    public record RetirementSeveranceResult(double amount, int multiplierMonths, double monthlySalary,
-                                            int totalMonths, int years, int months, double retirementFactor,
-                                            RetirementRegime regime) {
-    }
-
-    /** NEW-regime multiplier (months of pay) by total months of service. */
-    public static int retirementMultiplierNew(int totalMonths) {
-        if (totalMonths < 12) return 0;
-        if (totalMonths < 24) return 1;
-        if (totalMonths < 60) return 2;
-        if (totalMonths < 120) return 3;
-        if (totalMonths < 180) return 4;
-        if (totalMonths < 240) return 5;
-        return 6;
-    }
-
-    /** OLD-regime multiplier (months of pay) by total months of service. */
-    public static int retirementMultiplierOld(int totalMonths) {
-        if (totalMonths < 12) return 0;
-        if (totalMonths < 48) return 2;
-        if (totalMonths < 72) return 3;
-        if (totalMonths < 96) return 4;
-        if (totalMonths < 120) return 5;
-        if (totalMonths < 144) return 6;
-        if (totalMonths < 168) return 7;
-        if (totalMonths < 192) return 8;
-        if (totalMonths < 216) return 9;
-        if (totalMonths < 240) return 10;
-        return 12;
+    public record RetirementSeveranceResult(double amount, double factor, double dismissalSeveranceBase,
+                                            int compensationMonths, double calcSalary, int years,
+                                            boolean supplementaryInsured) {
     }
 
     /**
-     * Voluntary-retirement severance, pure deterministic core. Uses the plain monthly salary (NO δώρα
-     * uplift). Full (×1.0) factor at ≥17 years of service, otherwise half (×0.5).
+     * Voluntary-retirement severance = a percentage of the full no-notice dismissal severance.
+     * {@code supplementaryInsured} true ⇒ 40% (covered by επικουρική &amp; eligible for it), false ⇒ 50%.
      */
-    public static RetirementSeveranceResult retirementSeverance(double monthlySalary, int totalMonths,
-                                                                RetirementRegime regime) {
+    public static RetirementSeveranceResult retirementSeverance(double monthlySalary, int completedYears,
+                                                                boolean supplementaryInsured) {
         if (monthlySalary <= 0) {
             throw new IllegalArgumentException("monthlySalary must be > 0");
         }
-        totalMonths = Math.max(0, totalMonths);
-        int multiplier = regime == RetirementRegime.OLD
-                ? retirementMultiplierOld(totalMonths)
-                : retirementMultiplierNew(totalMonths);
-        double standard = monthlySalary * multiplier;
-        double retirementFactor = totalMonths / 12.0 >= RETIREMENT_FULL_FACTOR_YEARS ? 1.0 : 0.5;
-        double amount = standard * retirementFactor;
-        int years = totalMonths / 12;
-        int months = totalMonths % 12;
-        return new RetirementSeveranceResult(round2(amount), multiplier, round2(monthlySalary),
-                totalMonths, years, months, retirementFactor, regime);
-    }
-
-    /**
-     * Convenience overload: derives total months of service from {@code hireDate} to today and
-     * auto-selects the regime by hire date (override with a non-null {@code regimeOverride}).
-     */
-    public static RetirementSeveranceResult retirementSeverance(double monthlySalary, java.time.LocalDate hireDate,
-                                                                RetirementRegime regimeOverride) {
-        java.time.Period p = java.time.Period.between(hireDate, java.time.LocalDate.now());
-        int totalMonths = p.getYears() * 12 + p.getMonths();
-        RetirementRegime regime = regimeOverride != null
-                ? regimeOverride
-                : (hireDate.isAfter(RETIREMENT_REGIME_CUTOFF) ? RetirementRegime.NEW : RetirementRegime.OLD);
-        return retirementSeverance(monthlySalary, totalMonths, regime);
+        int years = Math.max(0, completedYears);
+        double calcSalary = monthlySalary * SEVERANCE_HOLIDAY_UPLIFT;   // ×14/12 for δώρα + επίδομα αδείας
+        int months = monthsWithoutNotice(years);                       // full Ν.2112/1920 no-notice ladder
+        double dismissalBase = months * calcSalary;
+        double factor = supplementaryInsured
+                ? RETIREMENT_FACTOR_SUPPLEMENTARY
+                : RETIREMENT_FACTOR_NO_SUPPLEMENTARY;
+        double amount = dismissalBase * factor;
+        return new RetirementSeveranceResult(round2(amount), factor, round2(dismissalBase),
+                months, round2(calcSalary), years, supplementaryInsured);
     }
 }

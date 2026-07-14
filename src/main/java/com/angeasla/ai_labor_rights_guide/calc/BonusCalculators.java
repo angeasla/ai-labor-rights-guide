@@ -4,7 +4,7 @@ import static com.angeasla.ai_labor_rights_guide.calc.CalcConstants.LEAVE_INCREM
 import static com.angeasla.ai_labor_rights_guide.calc.CalcConstants.round2;
 
 /**
- * Holiday bonuses (δώρα): Easter (ΑΝ 435/1968) and Christmas (ΑΝ 682/1945), per ΚΥΑ 19040/1981.
+ * Holiday bonuses (δώρα): Christmas &amp; Easter per Ν.1082/1980 + ΚΥΑ 19040/1981 (ΦΕΚ Β΄742); penal sanctions ΑΝ 690/1945.
  * Every variant adds the mandatory leave-pay increment (×(1 + 1/24)). Verified in CALCULATOR_SPECS.md.
  * Day counts are passed in (the tool/REST layer derives them from the period dates).
  */

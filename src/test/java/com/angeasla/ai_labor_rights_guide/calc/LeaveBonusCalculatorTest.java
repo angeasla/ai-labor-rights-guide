@@ -109,12 +109,9 @@ class LeaveBonusCalculatorTest {
 
     @Test
     void maternity_reasonable() {
-        var r = LeaveCalculators.maternity(LocalDate.of(2026, 1, 1), 5, 22, 0);
-        assertEquals(LocalDate.of(2028, 7, 1), r.windowEnd());
+        var r = LeaveCalculators.maternity(LocalDate.of(2026, 1, 1), 5, 22);
+        assertEquals(LocalDate.of(2028, 7, 1), r.windowEnd()); // 30 months, uniform (no multiple-birth extension, art.37)
         assertTrue(r.continuousDays() >= 60 && r.continuousDays() <= 90,
                 "expected ~3.5 months (5-day), got " + r.continuousDays());
-        // twins extend the window by 6 months → more owed time
-        var twins = LeaveCalculators.maternity(LocalDate.of(2026, 1, 1), 5, 22, 1);
-        assertTrue(twins.continuousDays() > r.continuousDays());
     }
 }

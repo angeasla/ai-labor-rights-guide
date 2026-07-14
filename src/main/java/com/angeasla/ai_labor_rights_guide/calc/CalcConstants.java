@@ -2,7 +2,6 @@ package com.angeasla.ai_labor_rights_guide.calc;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.time.LocalDate;
 
 /**
  * Central, year-versioned constants and shared helpers for all labor-law calculators.
@@ -15,7 +14,7 @@ public final class CalcConstants {
 
     // --- EFKA contributions (2026) ---
     public static final double EFKA_EMPLOYEE_RATE = 0.1337;
-    public static final double EFKA_EMPLOYER_RATE = 0.2229; // informational; ±~0.5% sector variance
+    public static final double EFKA_EMPLOYER_RATE = 0.2179; // 2026 (post Ν.5162/2024 health-branch cut); informational (employerCost only), ±~0.5% sector variance
     public static final double EFKA_MONTHLY_CEILING = 7761.94;
 
     // --- Income tax (2026, Ν.5246/2025) ---
@@ -47,20 +46,25 @@ public final class CalcConstants {
     public static final double SEVERANCE_HOLIDAY_UPLIFT = 14.0 / 12.0; // 1/6 προσαύξηση for δώρα + επίδομα αδείας
     public static final double SEVERANCE_WITH_NOTICE_FACTOR = 0.5;
 
-    // --- Voluntary-retirement severance (Ν.2112/1920, Ν.3863/2010, Ν.4093/2012 αρ.74) ---
-    // Hire date on-or-before this cutoff → OLD regime, after → NEW regime.
-    public static final LocalDate RETIREMENT_REGIME_CUTOFF = LocalDate.of(2010, 6, 17);
-    // ≥17 years of service → full (×1.0) retirement factor, otherwise half (×0.5).
-    public static final int RETIREMENT_FULL_FACTOR_YEARS = 17;
+    // --- Voluntary-retirement severance (Ν.3198/1955 art.8 §2) ---
+    // Reduced share of the FULL no-notice dismissal severance: 40% if covered by supplementary (επικουρική)
+    // insurance and eligible for the supplementary pension, otherwise 50%. No hire-date regime; no 17-year rule.
+    public static final double RETIREMENT_FACTOR_SUPPLEMENTARY = 0.40;
+    public static final double RETIREMENT_FACTOR_NO_SUPPLEMENTARY = 0.50;
 
-    // --- Unemployment benefit (ΔΥΠΑ, Ν.1545/1985, ΥΑ 35186/929/1999) ---
-    public static final double UNEMP_REPLACEMENT_RATE = 0.55;
+    // --- Unemployment benefit (ΔΥΠΑ, from 01.04.2026; Ν.1545/1985 + current ΔΥΠΑ schedule) ---
+    // The daily benefit = 55% of the statutory MINIMUM daily wage (a FLAT amount, NOT 55% of the
+    // claimant's own wage), tiered by average gross monthly earnings; +10% per dependent family member.
+    public static final double UNEMP_DAILY_FULL = 22.60;      // 100% → €565.00/mo (avg earnings ≥ tier-1)
+    public static final double UNEMP_DAILY_75 = 16.95;        // 75%  → €423.75/mo
+    public static final double UNEMP_DAILY_50 = 11.30;        // 50%  → €282.50/mo
+    public static final double UNEMP_TIER1_MIN_AVG = 493.09;  // avg gross monthly earnings ≥ this → 100%
+    public static final double UNEMP_TIER2_MIN_AVG = 246.55;  // ≥ this (and < tier-1) → 75%; below → 50%
+    public static final double UNEMP_DEPENDENT_UPLIFT = 0.10; // +10% per dependent family member
     public static final int UNEMP_DAYS_PER_MONTH = 25;
-    public static final int UNEMP_ANNUAL_TO_DAILY = 300;
-    // ΔΥΠΑ 2024 values.
-    public static final double UNEMP_BENEFIT_FLOOR = 416.0;
-    public static final double UNEMP_BENEFIT_CAP = 509.0;
     public static final int UNEMP_MIN_INSURED_DAYS = 125;
+    // NOTE: the age-≥49 duration exception (210 days → 12 months) is not modelled (needs claimant age);
+    // durationMonths() uses the standard 14-month-basis ladder. See CALCULATOR_SPECS.md.
 
     // --- Pensions ---
     public static final double NATIONAL_PENSION_BASE_2026 = 446.86;
